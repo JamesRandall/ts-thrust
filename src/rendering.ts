@@ -69,11 +69,23 @@ export function fillPolygon(
 
 // Terrain X values are byte-column indices from the BBC Micro (1 unit = 2 MODE 2 pixels).
 // Our 320px canvas is 2x MODE 2 resolution, so each terrain unit = 4 canvas pixels.
-const WORLD_SCALE_X = 4;
-const WORLD_SCALE_Y = 2;
-const WORLD_WIDTH = 256 * WORLD_SCALE_X;
+export const WORLD_SCALE_X = 4;
+export const WORLD_SCALE_Y = 2;
+export const WORLD_WIDTH = 256 * WORLD_SCALE_X;
 
-function rotationToSpriteIndex(radians: number): number {
+export function computeCamera(
+  playerX: number,
+  playerY: number,
+  screenW: number,
+  screenH: number
+): { camX: number; camY: number } {
+  return {
+    camX: Math.round(playerX * WORLD_SCALE_X - screenW / 2),
+    camY: Math.round(playerY * WORLD_SCALE_Y - screenH / 2),
+  };
+}
+
+export function rotationToSpriteIndex(radians: number): number {
   const twoPi = Math.PI * 2;
   const normalized = ((radians % twoPi) + twoPi) % twoPi;
   return Math.round(normalized / (twoPi / 32)) % 32;
@@ -93,10 +105,7 @@ export function renderLevel(
   const wx = (x: number) => x * WORLD_SCALE_X;
   const wy = (y: number) => y * WORLD_SCALE_Y;
 
-  // Camera: always centered on the player, snapped to integer pixels
-  // so terrain scanlines don't shimmer
-  const camX = Math.round(wx(playerX) - screenW / 2);
-  const camY = Math.round(wy(playerY) - screenH / 2);
+  const { camX, camY } = computeCamera(playerX, playerY, screenW, screenH);
 
   // Convert a world X to a screen X, handling horizontal wrapping
   const toScreenX = (worldX: number) => {

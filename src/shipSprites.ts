@@ -38,8 +38,10 @@ const spriteUrls: string[] = [
   ship24, ship25, ship26, ship27, ship28, ship29, ship30, ship31,
 ];
 
-export async function loadShipSprites(): Promise<ImageBitmap[]> {
-  return Promise.all(spriteUrls.map(async (url) => {
+export type SpriteMask = { dx: number; dy: number }[];
+
+export async function loadShipSprites(): Promise<{ sprites: ImageBitmap[]; masks: SpriteMask[] }> {
+  const results = await Promise.all(spriteUrls.map(async (url) => {
     const img = new Image();
     img.src = url;
     await img.decode();
@@ -69,7 +71,24 @@ export async function loadShipSprites(): Promise<ImageBitmap[]> {
       }
     }
 
+    // Extract opaque pixel offsets for collision mask
+    const mask: SpriteMask = [];
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const idx = (y * canvas.width + x) * 4;
+        if (data[idx + 3] > 0) {
+          mask.push({ dx: x, dy: y });
+        }
+      }
+    }
+
     ctx.putImageData(imageData, 0, 0);
-    return createImageBitmap(canvas);
+    const bitmap = await createImageBitmap(canvas);
+    return { sprite: bitmap, mask };
   }));
+
+  return {
+    sprites: results.map(r => r.sprite),
+    masks: results.map(r => r.mask),
+  };
 }

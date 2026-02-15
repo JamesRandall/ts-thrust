@@ -1,7 +1,8 @@
-import {renderLevel, drawStatusBar} from "./rendering";
+import {renderLevel, drawStatusBar, computeCamera, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
 import {loadShipSprites} from "./shipSprites";
 import {levels} from "./levels";
-import {createGame, tick} from "./game";
+import {createGame, tick, resetGame} from "./game";
+import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -26,6 +27,7 @@ window.addEventListener("resize", resize);
 resize();
 
 const game = createGame(levels[0]);
+const collisionBuf = createCollisionBuffer(INTERNAL_W, INTERNAL_H);
 
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => { keys.add(e.code); e.preventDefault(); });
@@ -34,7 +36,7 @@ window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 let lastTime = -1;
 
 async function startGame() {
-  const shipSprites = await loadShipSprites();
+  const { sprites: shipSprites, masks: shipMasks } = await loadShipSprites();
 
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
@@ -42,6 +44,23 @@ async function startGame() {
 
     tick(game, dt, keys);
 
+    // Collision detection
+    const { camX, camY } = computeCamera(game.player.x, game.player.y, INTERNAL_W, INTERNAL_H);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY);
+
+    const spriteIdx = rotationToSpriteIndex(game.player.rotation);
+    const sprite = shipSprites[spriteIdx];
+    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX - sprite.width / 2);
+    const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - sprite.height / 2);
+
+    const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
+    game.collisionResult = collision;
+
+    if (collision !== CollisionResult.None) {
+      resetGame(game);
+    }
+
+    // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H);

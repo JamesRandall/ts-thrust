@@ -1,5 +1,6 @@
 import { Level } from "./levels";
 import { Physics, ThrustInput } from "./physics";
+import { CollisionResult } from "./collision";
 
 export interface GameState {
   level: Level;
@@ -12,6 +13,7 @@ export interface GameState {
   fuel: number;
   lives: number;
   score: number;
+  collisionResult: CollisionResult;
 }
 
 export function createGame(level: Level): GameState {
@@ -28,9 +30,10 @@ export function createGame(level: Level): GameState {
       y: level.startingPosition.y,
       rotation: 0,
     },
-    fuel: 0,
-    lives: 0,
+    fuel: 1000,
+    lives: 3,
     score: 0,
+    collisionResult: CollisionResult.None,
   };
 }
 
@@ -46,4 +49,15 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
   state.player.x = state.physics.state.x;
   state.player.y = state.physics.state.y;
   state.player.rotation = state.physics.angleRadians;
+}
+
+export function resetGame(state: GameState): void {
+  state.player.x = state.level.startingPosition.x;
+  state.player.y = state.level.startingPosition.y;
+  state.player.rotation = 0;
+  state.physics.state.x = state.level.startingPosition.x;
+  state.physics.state.y = state.level.startingPosition.y;
+  state.physics.state.angle = 0;
+  state.physics.resetMotion();
+  state.collisionResult = CollisionResult.None;
 }
