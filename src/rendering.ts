@@ -162,8 +162,8 @@ export function renderLevel(
   playerY: number,
   playerRotation: number,
   shipSprites: ImageBitmap[],
-  screenW: number,
-  screenH: number,
+  camX: number,
+  camY: number,
   fuelSprite?: ImageBitmap,
   turretSprites?: TurretSprites,
   powerPlantSprite?: ImageBitmap,
@@ -172,8 +172,6 @@ export function renderLevel(
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
   const wy = (y: number) => y * WORLD_SCALE_Y;
-
-  const { camX, camY } = computeCamera(playerX, playerY, screenW, screenH);
 
   // Convert a world X to a screen X, handling horizontal wrapping
   const toScreenX = (worldX: number) => {

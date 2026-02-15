@@ -1,4 +1,4 @@
-import {renderLevel, drawStatusBar, drawText, computeCamera, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
+import {renderLevel, drawStatusBar, drawText, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
 import {loadShipSprites, loadSprite, loadTurretSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
 import powerPlantPng from "./sprites/powerPlant.png";
@@ -63,13 +63,14 @@ async function startGame() {
 
     tick(game, dt, keys);
 
-    // Collision detection
-    const { camX, camY } = computeCamera(game.player.x, game.player.y, INTERNAL_W, INTERNAL_H);
+    // Camera from scroll state
+    const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
+    const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const sprite = shipSprites[spriteIdx];
-    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX - sprite.width / 2);
+    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX);
     const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - sprite.height / 2);
 
     const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
@@ -82,7 +83,7 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 
