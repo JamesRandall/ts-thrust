@@ -27,13 +27,16 @@ import * as fs from "fs";
 
 type Polygon = Array<number>;
 type ObjectPosition = { x: number; y: number };
+type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';
+type TurretPosition = ObjectPosition & { direction: TurretDirection };
 
 type Level = {
     name: string;
     terrainColor: string;
+    objectColor: string;
     startingPosition: ObjectPosition;
     polygons: Polygon[];
-    turrets: ObjectPosition[];
+    turrets: TurretPosition[];
     powerPlant: ObjectPosition;
     podPedestal: ObjectPosition;
     fuel: ObjectPosition[];
@@ -158,6 +161,14 @@ const levelResetData = [
 ];
 
 const levelLandscapeColour = [0x01, 0x02, 0x06, 0x02, 0x01, 0x05];
+const levelObjectColour = [0x02, 0x01, 0x02, 0x05, 0x05, 0x06];
+
+const gunTypeToDirection: Record<number, TurretDirection> = {
+    0x00: 'up_right',
+    0x01: 'down_right',
+    0x02: 'up_left',
+    0x03: 'down_left',
+};
 
 // ============================================================================
 // Terrain decoder - simplified polygon vertices
@@ -252,7 +263,7 @@ function getStartingPosition(levelIndex: number): ObjectPosition {
 
 function decodeObjects(levelIndex: number) {
     const obj = objectData[levelIndex];
-    const turrets: ObjectPosition[] = [];
+    const turrets: TurretPosition[] = [];
     const fuel: ObjectPosition[] = [];
     let powerPlant: ObjectPosition = { x: 0, y: 0 };
     let podPedestal: ObjectPosition = { x: 0, y: 0 };
@@ -262,7 +273,7 @@ function decodeObjects(levelIndex: number) {
         const type = obj.types[i];
         const pos: ObjectPosition = { x: obj.posX[i], y: obj.posYE[i] * 256 + obj.posY[i] };
 
-        if (isGunType(type)) turrets.push(pos);
+        if (isGunType(type)) turrets.push({ ...pos, direction: gunTypeToDirection[type] });
         else if (type === OBJECT_FUEL) fuel.push(pos);
         else if (type === OBJECT_POD_STAND) podPedestal = pos;
         else if (type === OBJECT_GENERATOR) powerPlant = pos;
@@ -300,10 +311,12 @@ function decodeLevels(): Level[] {
         const objects = decodeObjects(i);
         const startingPosition = getStartingPosition(i);
         const terrainColor = bbcMicroColours[levelLandscapeColour[i]] ?? "white";
+        const objectColor = bbcMicroColours[levelObjectColour[i]] ?? "white";
 
         levels.push({
             name: `Level ${i}`,
             terrainColor,
+            objectColor,
             startingPosition,
             polygons,
             turrets: objects.turrets,
@@ -344,14 +357,17 @@ function generateOutput(levels: Level[]): string {
     lines.push(`// Decoded by decode-levels.ts`);
     lines.push(``);
     lines.push(`export type Polygon = Array<number>;`);
-    lines.push(`export type ObjectPosition = { x: number, y: number };`);
+    lines.push(`export type ObjectPosition = { x: number, y: number};`);
+    lines.push(`export type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';`);
+    lines.push(`export type TurretPosition = ObjectPosition & { direction: TurretDirection };`);
     lines.push(``);
     lines.push(`export type Level = {`);
     lines.push(`    name: string;`);
     lines.push(`    terrainColor: string;`);
+    lines.push(`    objectColor: string;`);
     lines.push(`    startingPosition: ObjectPosition;`);
     lines.push(`    polygons: Polygon[];`);
-    lines.push(`    turrets: ObjectPosition[];`);
+    lines.push(`    turrets: TurretPosition[];`);
     lines.push(`    powerPlant: ObjectPosition;`);
     lines.push(`    podPedestal: ObjectPosition;`);
     lines.push(`    fuel: ObjectPosition[];`);
@@ -374,6 +390,7 @@ function generateOutput(levels: Level[]): string {
         lines.push(`    {`);
         lines.push(`        name: "${level.name}",`);
         lines.push(`        terrainColor: bbcMicroColours.${level.terrainColor},`);
+        lines.push(`        objectColor: bbcMicroColours.${level.objectColor},`);
         lines.push(`        startingPosition: ${formatPosition(level.startingPosition)},`);
         lines.push(`        polygons: [`);
         for (let p = 0; p < level.polygons.length; p++) {
@@ -382,7 +399,7 @@ function generateOutput(levels: Level[]): string {
             lines.push(`            ${formatPolygon(level.polygons[p], "            ")},`);
         }
         lines.push(`        ],`);
-        lines.push(`        turrets: [${level.turrets.map(t => `\n            ${formatPosition(t)}`).join(",")}${level.turrets.length > 0 ? ",\n        " : ""}],`);
+        lines.push(`        turrets: [${level.turrets.map(t => `\n            { x: ${t.x}, y: ${t.y}, direction: '${t.direction}' }`).join(",")}${level.turrets.length > 0 ? ",\n        " : ""}],`);
         lines.push(`        powerPlant: ${formatPosition(level.powerPlant)},`);
         lines.push(`        podPedestal: ${formatPosition(level.podPedestal)},`);
         lines.push(`        fuel: [${level.fuel.map(f => `\n            ${formatPosition(f)}`).join(",")}${level.fuel.length > 0 ? ",\n        " : ""}],`);

@@ -37,6 +37,8 @@ export function renderCollisionBuffer(
   camY: number,
   fuelSprite?: ImageBitmap,
   turretSprites?: TurretSprites,
+  powerPlantSprite?: ImageBitmap,
+  podStandSprite?: ImageBitmap,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -71,8 +73,22 @@ export function renderCollisionBuffer(
     ctx.fillRect(sx - 3, sy - 3, 7, 7);
   };
 
-  drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
-  drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  if (powerPlantSprite) {
+    const sx = Math.round(toScreenX(level.powerPlant.x));
+    const sy = Math.round(wy(level.powerPlant.y) - camY);
+    ctx.fillStyle = bbcMicroColours.cyan;
+    ctx.fillRect(sx, sy - 2, powerPlantSprite.width, powerPlantSprite.height);
+  } else {
+    drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
+  }
+  if (podStandSprite) {
+    const sx = Math.round(toScreenX(level.podPedestal.x));
+    const sy = Math.round(wy(level.podPedestal.y) - camY);
+    ctx.fillStyle = bbcMicroColours.white;
+    ctx.fillRect(sx, sy - 1, podStandSprite.width, podStandSprite.height);
+  } else {
+    drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  }
   for (const f of level.fuel) {
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
@@ -93,7 +109,7 @@ export function renderCollisionBuffer(
       const sx = Math.round(toScreenX(t.x));
       const sy = Math.round(wy(t.y) - camY);
       ctx.fillStyle = bbcMicroColours.red;
-      ctx.fillRect(sx, sy, w, h);
+      ctx.fillRect(sx, sy - 1, w, h);
     } else {
       drawMarker(t.x, t.y, bbcMicroColours.red);
     }

@@ -8,7 +8,7 @@ export type TurretPosition = ObjectPosition & { direction: TurretDirection };
 export type Level = {
     name: string;
     terrainColor: string;
-    turretColor: string;
+    objectColor: string;
     startingPosition: ObjectPosition;
     polygons: Polygon[];
     turrets: TurretPosition[];
@@ -21,7 +21,7 @@ export const levels: Level[] = [
     {
         name: "Level 0",
         terrainColor: bbcMicroColours.red,
-        turretColor: bbcMicroColours.green,
+        objectColor: bbcMicroColours.green,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -47,7 +47,7 @@ export const levels: Level[] = [
     {
         name: "Level 1",
         terrainColor: bbcMicroColours.green,
-        turretColor: bbcMicroColours.cyan,
+        objectColor: bbcMicroColours.red,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -64,8 +64,8 @@ export const levels: Level[] = [
             ],
         ],
         turrets: [
-            { x: 116, y: 532, direction: 'up_right' },
-            { x: 158, y: 522, direction: 'up_left' },
+            { x: 116, y: 532, direction: 'down_right' },
+            { x: 158, y: 522, direction: 'down_left' },
         ],
         powerPlant: { x: 100, y: 433 },
         podPedestal: { x: 127, y: 568 },
@@ -76,7 +76,7 @@ export const levels: Level[] = [
     {
         name: "Level 2",
         terrainColor: bbcMicroColours.cyan,
-        turretColor: bbcMicroColours.red,
+        objectColor: bbcMicroColours.green,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -95,11 +95,11 @@ export const levels: Level[] = [
             ],
         ],
         turrets: [
-            { x: 93, y: 663, direction: 'up_right' },
-            { x: 62, y: 626, direction: 'up_right' },
-            { x: 88, y: 584, direction: 'up_right' },
+            { x: 93, y: 663, direction: 'up_left' },
+            { x: 62, y: 626, direction: 'down_right' },
+            { x: 88, y: 584, direction: 'down_right' },
             { x: 171, y: 542, direction: 'up_left' },
-            { x: 129, y: 522, direction: 'up_right' },
+            { x: 129, y: 522, direction: 'down_right' },
         ],
         powerPlant: { x: 164, y: 451 },
         podPedestal: { x: 78, y: 718 },
@@ -115,7 +115,7 @@ export const levels: Level[] = [
     {
         name: "Level 3",
         terrainColor: bbcMicroColours.green,
-        turretColor: bbcMicroColours.red,
+        objectColor: bbcMicroColours.magenta,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -135,12 +135,12 @@ export const levels: Level[] = [
             ],
         ],
         turrets: [
-            { x: 114, y: 464, direction: 'up_right' },
+            { x: 114, y: 464, direction: 'down_right' },
             { x: 90, y: 513, direction: 'up_right' },
-            { x: 90, y: 534, direction: 'up_right' },
-            { x: 120, y: 548, direction: 'up_right' },
+            { x: 90, y: 534, direction: 'down_right' },
+            { x: 120, y: 548, direction: 'down_left' },
             { x: 109, y: 588, direction: 'up_right' },
-            { x: 138, y: 658, direction: 'up_left' },
+            { x: 138, y: 658, direction: 'down_right' },
             { x: 162, y: 698, direction: 'up_left' },
         ],
         powerPlant: { x: 91, y: 576 },
@@ -152,7 +152,7 @@ export const levels: Level[] = [
     {
         name: "Level 4",
         terrainColor: bbcMicroColours.red,
-        turretColor: bbcMicroColours.green,
+        objectColor: bbcMicroColours.magenta,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -177,13 +177,13 @@ export const levels: Level[] = [
             ],
         ],
         turrets: [
-            { x: 114, y: 525, direction: 'up_right' },
-            { x: 162, y: 524, direction: 'up_left' },
+            { x: 114, y: 525, direction: 'down_right' },
+            { x: 162, y: 524, direction: 'down_left' },
             { x: 134, y: 643, direction: 'up_left' },
             { x: 93, y: 772, direction: 'up_right' },
-            { x: 142, y: 768, direction: 'up_left' },
+            { x: 142, y: 768, direction: 'down_left' },
             { x: 123, y: 815, direction: 'up_right' },
-            { x: 172, y: 867, direction: 'up_left' },
+            { x: 172, y: 867, direction: 'down_left' },
         ],
         powerPlant: { x: 143, y: 553 },
         podPedestal: { x: 162, y: 909 },
@@ -201,7 +201,7 @@ export const levels: Level[] = [
     {
         name: "Level 5",
         terrainColor: bbcMicroColours.magenta,
-        turretColor: bbcMicroColours.cyan,
+        objectColor: bbcMicroColours.cyan,
         startingPosition: { x: 108, y: 401 },
         polygons: [
             // Left terrain wall
@@ -227,16 +227,16 @@ export const levels: Level[] = [
         ],
         turrets: [
             { x: 175, y: 959, direction: 'up_left' },
-            { x: 155, y: 940, direction: 'up_left' },
-            { x: 162, y: 902, direction: 'up_left' },
-            { x: 155, y: 814, direction: 'up_left' },
-            { x: 123, y: 799, direction: 'up_right' },
+            { x: 155, y: 940, direction: 'down_right' },
+            { x: 162, y: 902, direction: 'down_right' },
+            { x: 155, y: 814, direction: 'down_left' },
+            { x: 123, y: 799, direction: 'down_right' },
             { x: 172, y: 705, direction: 'up_left' },
-            { x: 172, y: 680, direction: 'up_left' },
+            { x: 172, y: 680, direction: 'down_left' },
             { x: 172, y: 615, direction: 'up_left' },
-            { x: 202, y: 574, direction: 'up_left' },
-            { x: 153, y: 569, direction: 'up_left' },
-            { x: 153, y: 460, direction: 'up_left' },
+            { x: 202, y: 574, direction: 'down_left' },
+            { x: 153, y: 569, direction: 'down_right' },
+            { x: 153, y: 460, direction: 'down_left' },
         ],
         powerPlant: { x: 169, y: 1028 },
         podPedestal: { x: 154, y: 996 },

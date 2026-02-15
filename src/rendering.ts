@@ -95,6 +95,36 @@ export function rotationToSpriteIndex(radians: number): number {
 const tintCanvas = document.createElement('canvas');
 const tintCtx = tintCanvas.getContext('2d')!;
 
+function parseHexColor(hex: string): [number, number, number] {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
+}
+
+function drawWhiteReplacedSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: ImageBitmap,
+  x: number,
+  y: number,
+  color: string,
+) {
+  tintCanvas.width = sprite.width;
+  tintCanvas.height = sprite.height;
+  tintCtx.clearRect(0, 0, sprite.width, sprite.height);
+  tintCtx.drawImage(sprite, 0, 0);
+  const imageData = tintCtx.getImageData(0, 0, sprite.width, sprite.height);
+  const data = imageData.data;
+  const [cr, cg, cb] = parseHexColor(color);
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] === 255 && data[i + 1] === 255 && data[i + 2] === 255 && data[i + 3] > 0) {
+      data[i] = cr;
+      data[i + 1] = cg;
+      data[i + 2] = cb;
+    }
+  }
+  tintCtx.putImageData(imageData, 0, 0);
+  ctx.drawImage(tintCanvas, x, y);
+}
+
 function drawTintedSprite(
   ctx: CanvasRenderingContext2D,
   sprite: ImageBitmap,
@@ -136,6 +166,8 @@ export function renderLevel(
   screenH: number,
   fuelSprite?: ImageBitmap,
   turretSprites?: TurretSprites,
+  powerPlantSprite?: ImageBitmap,
+  podStandSprite?: ImageBitmap,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -172,8 +204,20 @@ export function renderLevel(
     ctx.fillRect(sx - 3, sy - 3, 7, 7);
   };
 
-  drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
-  drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  if (powerPlantSprite) {
+    const sx = Math.round(toScreenX(level.powerPlant.x));
+    const sy = Math.round(wy(level.powerPlant.y) - camY);
+    drawWhiteReplacedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor);
+  } else {
+    drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
+  }
+  if (podStandSprite) {
+    const sx = Math.round(toScreenX(level.podPedestal.x));
+    const sy = Math.round(wy(level.podPedestal.y) - camY);
+    drawWhiteReplacedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor);
+  } else {
+    drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  }
   for (const f of level.fuel) {
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
@@ -188,7 +232,7 @@ export function renderLevel(
       const sprite = getTurretSprite(t.direction, turretSprites);
       const sx = Math.round(toScreenX(t.x));
       const sy = Math.round(wy(t.y) - camY);
-      drawTintedSprite(ctx, sprite, sx, sy, level.turretColor);
+      drawTintedSprite(ctx, sprite, sx, sy - 1, level.objectColor);
     } else {
       drawMarker(t.x, t.y, bbcMicroColours.red);
     }
@@ -199,7 +243,7 @@ export function renderLevel(
   const sprite = shipSprites[spriteIdx];
   const screenX = Math.round(wx(playerX) - camX);
   const screenY = Math.round(wy(playerY) - camY);
-  ctx.drawImage(sprite, Math.round(screenX - sprite.width / 2), Math.round(screenY - sprite.height / 2));
+  ctx.drawImage(sprite, screenX, Math.round(screenY - sprite.height / 2));
 }
 
 export function drawStatusBar(

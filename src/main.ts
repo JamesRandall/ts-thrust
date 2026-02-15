@@ -1,6 +1,8 @@
-import {renderLevel, drawStatusBar, computeCamera, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
+import {renderLevel, drawStatusBar, drawText, computeCamera, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
 import {loadShipSprites, loadSprite, loadTurretSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
+import powerPlantPng from "./sprites/powerPlant.png";
+import podStandPng from "./sprites/pod_stand.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
@@ -35,12 +37,15 @@ window.addEventListener("keydown", (e) => { keys.add(e.code); e.preventDefault()
 window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 
 let lastTime = -1;
+let fps = 0;
 
 async function startGame() {
-  const [{ sprites: shipSprites, masks: shipMasks }, fuelSprite, turretSprites] = await Promise.all([
+  const [{ sprites: shipSprites, masks: shipMasks }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite] = await Promise.all([
     loadShipSprites(),
     loadSprite(fuelPng),
     loadTurretSprites(),
+    loadSprite(powerPlantPng),
+    loadSprite(podStandPng),
   ]);
 
   function frame(time: number) {
@@ -60,7 +65,7 @@ async function startGame() {
 
     // Collision detection
     const { camX, camY } = computeCamera(game.player.x, game.player.y, INTERNAL_W, INTERNAL_H);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const sprite = shipSprites[spriteIdx];
@@ -77,9 +82,16 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H, fuelSprite, turretSprites);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
+
+    // FPS counter
+    if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
+    const fpsText = String(Math.round(fps));
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, INTERNAL_H - 7, fpsText.length * 8 + 2, 7);
+    drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
 
     requestAnimationFrame(frame);
   }
