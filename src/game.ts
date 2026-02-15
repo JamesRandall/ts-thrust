@@ -1,7 +1,9 @@
 import { Level } from "./levels";
+import { Physics, ThrustInput } from "./physics";
 
 export interface GameState {
   level: Level;
+  physics: Physics;
   player: {
     x: number;
     y: number;
@@ -12,13 +14,15 @@ export interface GameState {
   score: number;
 }
 
-const MOVE_SPEED = 60;
-const FULL_ROTATION_TIME = 1.3;
-const ROTATION_SPEED = (Math.PI * 2) / FULL_ROTATION_TIME;
-
 export function createGame(level: Level): GameState {
+  const physics = new Physics({
+    x: level.startingPosition.x,
+    y: level.startingPosition.y,
+  });
+
   return {
     level,
+    physics,
     player: {
       x: level.startingPosition.x,
       y: level.startingPosition.y,
@@ -31,11 +35,15 @@ export function createGame(level: Level): GameState {
 }
 
 export function tick(state: GameState, dt: number, keys: Set<string>): void {
-  if (keys.has("KeyA")) state.player.rotation -= ROTATION_SPEED * dt;
-  if (keys.has("KeyD")) state.player.rotation += ROTATION_SPEED * dt;
+  const input: ThrustInput = {
+    thrust: keys.has("KeyW"),
+    rotate: keys.has("KeyA") ? -1 : keys.has("KeyD") ? 1 : 0,
+    shield: false,
+  };
 
-  if (keys.has("ArrowLeft"))  state.player.x -= MOVE_SPEED * dt;
-  if (keys.has("ArrowRight")) state.player.x += MOVE_SPEED * dt;
-  if (keys.has("ArrowUp"))    state.player.y -= MOVE_SPEED * dt;
-  if (keys.has("ArrowDown"))  state.player.y += MOVE_SPEED * dt;
+  state.physics.update(dt, input);
+
+  state.player.x = state.physics.state.x;
+  state.player.y = state.physics.state.y;
+  state.player.rotation = state.physics.angleRadians;
 }
