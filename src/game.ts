@@ -24,6 +24,7 @@ export interface GameState {
   lives: number;
   score: number;
   collisionResult: CollisionResult;
+  shieldActive: boolean;
   scroll: ScrollState;
   scrollConfig: ScrollConfig;
   scrollAccumulator: number;
@@ -56,6 +57,7 @@ export function createGame(level: Level): GameState {
     lives: 3,
     score: 0,
     collisionResult: CollisionResult.None,
+    shieldActive: false,
     scroll,
     scrollConfig,
     scrollAccumulator: 0,
@@ -63,10 +65,12 @@ export function createGame(level: Level): GameState {
 }
 
 export function tick(state: GameState, dt: number, keys: Set<string>): void {
+  state.shieldActive = keys.has("Space");
+
   const input: ThrustInput = {
     thrust: keys.has("KeyW"),
     rotate: keys.has("KeyA") ? -1 : keys.has("KeyD") ? 1 : 0,
-    shield: false,
+    shield: state.shieldActive,
   };
 
   state.physics.update(dt, input);

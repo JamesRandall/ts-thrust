@@ -59,8 +59,8 @@ function q78ToFloat(intByte: number, fracByte: number): number {
 }
 
 // Pre-compute float angle tables (indexed 0..31)
-const ANGLE_Y = ANGLE_TO_Y_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_Y_FRAC[i]));
-const ANGLE_X = ANGLE_TO_X_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_X_FRAC[i]));
+export const ANGLE_Y = ANGLE_TO_Y_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_Y_FRAC[i]));
+export const ANGLE_X = ANGLE_TO_X_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_X_FRAC[i]));
 
 // ---------------------------------------------------------------------------
 // Per-level gravity (fractional byte, INT is always 0)

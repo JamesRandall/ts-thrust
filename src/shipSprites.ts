@@ -89,7 +89,12 @@ export async function loadSprite(url: string): Promise<ImageBitmap> {
   return createImageBitmap(canvas);
 }
 
-export async function loadShipSprites(): Promise<{ sprites: ImageBitmap[]; masks: SpriteMask[] }> {
+export interface SpriteCenter {
+  x: number;
+  y: number;
+}
+
+export async function loadShipSprites(): Promise<{ sprites: ImageBitmap[]; masks: SpriteMask[]; centers: SpriteCenter[] }> {
   const results = await Promise.all(spriteUrls.map(async (url) => {
     const img = new Image();
     img.src = url;
@@ -120,24 +125,33 @@ export async function loadShipSprites(): Promise<{ sprites: ImageBitmap[]; masks
       }
     }
 
-    // Extract opaque pixel offsets for collision mask
+    // Extract opaque pixel offsets for collision mask and compute center of mass
     const mask: SpriteMask = [];
+    let sumX = 0, sumY = 0, count = 0;
     for (let y = 0; y < canvas.height; y++) {
       for (let x = 0; x < canvas.width; x++) {
         const idx = (y * canvas.width + x) * 4;
         if (data[idx + 3] > 0) {
           mask.push({ dx: x, dy: y });
+          sumX += x;
+          sumY += y;
+          count++;
         }
       }
     }
+    const center: SpriteCenter = {
+      x: count > 0 ? sumX / count : canvas.width / 2,
+      y: count > 0 ? sumY / count : canvas.height / 2,
+    };
 
     ctx.putImageData(imageData, 0, 0);
     const bitmap = await createImageBitmap(canvas);
-    return { sprite: bitmap, mask };
+    return { sprite: bitmap, mask, center };
   }));
 
   return {
     sprites: results.map(r => r.sprite),
     masks: results.map(r => r.mask),
+    centers: results.map(r => r.center),
   };
 }

@@ -3,6 +3,7 @@ import {loadShipSprites, loadSprite, loadTurretSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
 import powerPlantPng from "./sprites/powerPlant.png";
 import podStandPng from "./sprites/pod_stand.png";
+import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
@@ -40,12 +41,13 @@ let lastTime = -1;
 let fps = 0;
 
 async function startGame() {
-  const [{ sprites: shipSprites, masks: shipMasks }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite] = await Promise.all([
+  const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite] = await Promise.all([
     loadShipSprites(),
     loadSprite(fuelPng),
     loadTurretSprites(),
     loadSprite(powerPlantPng),
     loadSprite(podStandPng),
+    loadSprite(shieldPng),
   ]);
 
   function frame(time: number) {
@@ -69,9 +71,9 @@ async function startGame() {
     renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
-    const sprite = shipSprites[spriteIdx];
-    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX);
-    const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - sprite.height / 2);
+    const center = shipCenters[spriteIdx];
+    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX - center.x);
+    const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - center.y);
 
     const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
     game.collisionResult = collision;
@@ -83,7 +85,7 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 

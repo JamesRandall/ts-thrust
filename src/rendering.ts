@@ -16,7 +16,7 @@ export interface Point {
 
 import { Level, TurretDirection } from "./levels";
 import { fontData, charIndex, CHAR_W, CHAR_H } from "./font";
-import { TurretSprites } from "./shipSprites";
+import { TurretSprites, SpriteCenter } from "./shipSprites";
 
 export function fillPolygon(
   ctx: CanvasRenderingContext2D,
@@ -162,12 +162,14 @@ export function renderLevel(
   playerY: number,
   playerRotation: number,
   shipSprites: ImageBitmap[],
+  shipCenters: SpriteCenter[],
   camX: number,
   camY: number,
   fuelSprite?: ImageBitmap,
   turretSprites?: TurretSprites,
   powerPlantSprite?: ImageBitmap,
   podStandSprite?: ImageBitmap,
+  shieldSprite?: ImageBitmap,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -236,12 +238,23 @@ export function renderLevel(
     }
   }
 
-  // Draw player ship (always at screen center)
+  // Draw player ship — anchor on per-sprite center of mass to eliminate rotation jiggle
   const spriteIdx = rotationToSpriteIndex(playerRotation);
   const sprite = shipSprites[spriteIdx];
+  const center = shipCenters[spriteIdx];
   const screenX = Math.round(wx(playerX) - camX);
   const screenY = Math.round(wy(playerY) - camY);
-  ctx.drawImage(sprite, screenX, Math.round(screenY - sprite.height / 2));
+  const shipDrawX = Math.round(screenX - center.x);
+  const shipDrawY = Math.round(screenY - center.y);
+
+  ctx.drawImage(sprite, shipDrawX, shipDrawY);
+
+  if (shieldSprite) {
+    // Shield is centered on the canvas (same size as ship sprites)
+    const shieldDrawX = Math.round(screenX - shieldSprite.width / 2);
+    const shieldDrawY = Math.round(screenY - shieldSprite.height / 2);
+    drawWhiteReplacedSprite(ctx, shieldSprite, shieldDrawX, shieldDrawY, bbcMicroColours.green);
+  }
 }
 
 export function drawStatusBar(

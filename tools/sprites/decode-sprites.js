@@ -749,26 +749,41 @@ async function main() {
   const shieldFb = decodeShipSpriteClean(shieldSprite, 0, false);
   const podFb = decodeShipSpriteClean(podSprite, 0, false);
 
-  // Union bounding box across all ship sprites and shield
-  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+  // ---- Shared plot origin: use shield circle centre as anchor ----
+  // The sprite data has embedded centering (leading blank rows + per-row horizontal skips)
+  // so all sprites share the same plot origin and the visual centre is stable.
+  const shieldPixels = shieldFb.extractPixels();
+  let sMinX = Infinity, sMinY = Infinity, sMaxX = 0, sMaxY = 0;
+  for (const p of shieldPixels) {
+    if (p.x < sMinX) sMinX = p.x;
+    if (p.y < sMinY) sMinY = p.y;
+    if (p.x > sMaxX) sMaxX = p.x;
+    if (p.y > sMaxY) sMaxY = p.y;
+  }
+  const anchorX = Math.round((sMinX + sMaxX) / 2);
+  const anchorY = Math.round((sMinY + sMaxY) / 2);
+  console.log(`Shield bbox: x=${sMinX}..${sMaxX}, y=${sMinY}..${sMaxY}`);
+  console.log(`Anchor (shield centre): (${anchorX}, ${anchorY})`);
+
+  // Find max extent from anchor across all sprites and shield
+  let maxLeft = 0, maxRight = 0, maxUp = 0, maxDown = 0;
   for (const fb of [...allShipFbs, shieldFb]) {
     for (const p of fb.extractPixels()) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
+      maxLeft = Math.max(maxLeft, anchorX - p.x);
+      maxRight = Math.max(maxRight, p.x - anchorX);
+      maxUp = Math.max(maxUp, anchorY - p.y);
+      maxDown = Math.max(maxDown, p.y - anchorY);
     }
   }
+  const halfW = Math.max(maxLeft, maxRight);
+  const halfH = Math.max(maxUp, maxDown);
+  const cropW = halfW * 2 + 1;
+  const cropH = halfH * 2 + 1;
+  const minX = anchorX - halfW;
+  const minY = anchorY - halfH;
+  console.log(`Uniform canvas: ${cropW}x${cropH}, anchor at centre (${halfW}, ${halfH})`);
 
-  const cropW = maxX - minX + 1;
-  const cropH = maxY - minY + 1;
-
-  // Ship plot origin in framebuffer pixel coords (startCharX=6, startCharRow=2)
-  const anchorX = 6 * 4; // 24
-  const anchorY = 2 * 8; // 16
-  console.log(`Ship/shield uniform canvas: ${cropW}x${cropH}, anchor at (${anchorX - minX}, ${anchorY - minY})`);
-
-  // ---- Pass 2: output all sprites on the fixed canvas ----
+  // ---- Pass 2: output all sprites on the shared canvas ----
   console.log('Ship sprites (angles 0-31):');
   for (let angle = 0; angle <= 31; angle++) {
     await framebufferToFixedPng(
