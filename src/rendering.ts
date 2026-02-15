@@ -14,65 +14,8 @@ export interface Point {
   y: number;
 }
 
-import { Model } from "./models";
 import { Level } from "./levels";
 import { fontData, charIndex, CHAR_W, CHAR_H } from "./font";
-
-export function drawModel(
-  ctx: CanvasRenderingContext2D,
-  model: Model,
-  x: number,
-  y: number,
-  rotation: number
-) {
-  for (const polygon of model) {
-    const points: Point[] = [];
-    for (let i = 0; i < polygon.vertices.length; i += 2) {
-      points.push({ x: polygon.vertices[i], y: polygon.vertices[i + 1] });
-    }
-
-    // Find center of polygon
-    let cx = 0;
-    let cy = 0;
-    for (const p of points) {
-      cx += p.x;
-      cy += p.y;
-    }
-    cx /= points.length;
-    cy /= points.length;
-
-    // Rotate around center and translate to position
-    const cos = Math.cos(rotation);
-    const sin = Math.sin(rotation);
-    const transformed = points.map(p => ({
-      x: x + (p.x - cx) * cos - (p.y - cy) * sin,
-      y: y + (p.x - cx) * sin + (p.y - cy) * cos,
-    }));
-
-    ctx.fillStyle = polygon.colour;
-    for (let i = 0; i < transformed.length; i++) {
-      const a = transformed[i];
-      const b = transformed[(i + 1) % transformed.length];
-      drawLine(ctx, Math.round(a.x), Math.round(a.y), Math.round(b.x), Math.round(b.y));
-    }
-  }
-}
-
-function drawLine(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number) {
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1;
-  const sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
-
-  while (true) {
-    ctx.fillRect(x0, y0, 1, 1);
-    if (x0 === x1 && y0 === y1) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) { err -= dy; x0 += sx; }
-    if (e2 < dx) { err += dx; y0 += sy; }
-  }
-}
 
 export function fillPolygon(
   ctx: CanvasRenderingContext2D,
@@ -130,13 +73,19 @@ const WORLD_SCALE_X = 4;
 const WORLD_SCALE_Y = 2;
 const WORLD_WIDTH = 256 * WORLD_SCALE_X;
 
+function rotationToSpriteIndex(radians: number): number {
+  const twoPi = Math.PI * 2;
+  const normalized = ((radians % twoPi) + twoPi) % twoPi;
+  return Math.round(normalized / (twoPi / 32)) % 32;
+}
+
 export function renderLevel(
   ctx: CanvasRenderingContext2D,
   level: Level,
   playerX: number,
   playerY: number,
   playerRotation: number,
-  ship: Model,
+  shipSprites: ImageBitmap[],
   screenW: number,
   screenH: number
 ) {
@@ -188,7 +137,11 @@ export function renderLevel(
   }
 
   // Draw player ship (always at screen center)
-  drawModel(ctx, ship, Math.round(wx(playerX) - camX), Math.round(wy(playerY) - camY), playerRotation);
+  const spriteIdx = rotationToSpriteIndex(playerRotation);
+  const sprite = shipSprites[spriteIdx];
+  const screenX = Math.round(wx(playerX) - camX);
+  const screenY = Math.round(wy(playerY) - camY);
+  ctx.drawImage(sprite, Math.round(screenX - sprite.width / 2), Math.round(screenY - sprite.height / 2));
 }
 
 export function drawText(

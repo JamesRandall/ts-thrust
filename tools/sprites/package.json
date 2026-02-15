@@ -1,0 +1,10 @@
+{
+  "name": "thrust-sprite-tools",
+  "private": true,
+  "scripts": {
+    "decode": "node decode-sprites.js"
+  },
+  "dependencies": {
+    "sharp": "^0.33.0"
+  }
+}
