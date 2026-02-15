@@ -10,6 +10,8 @@ This conversion focuses on authenticity — recapturing the look and feel of the
 
 ## Acknowledgements
 
+Many thanks to:
+
 - **Jeremy C. Smith** — author of the original *Thrust* for the BBC Micro (1986)
 - **Kieran Connell** — annotated 6502 disassembly of the original game, which this project uses as its primary reference for physics, scrolling, and game logic: [github.com/kieranhj/thrust-disassembly](https://github.com/kieranhj/thrust-disassembly)
 
