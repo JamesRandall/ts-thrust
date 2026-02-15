@@ -6,6 +6,8 @@ Thrust is a gravity/inertia game where you pilot a ship through caverns, collect
 
 This conversion focuses on authenticity — recapturing the look and feel of the original BBC Micro game as closely as possible, using constants, algorithms, and behaviours extracted directly from the 6502 source code.
 
+![Thrust](screenshots/typescript_thrust.png)
+
 ## Acknowledgements
 
 - **Jeremy C. Smith** — author of the original *Thrust* for the BBC Micro (1986)
