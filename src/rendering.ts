@@ -144,6 +144,93 @@ export function renderLevel(
   ctx.drawImage(sprite, Math.round(screenX - sprite.width / 2), Math.round(screenY - sprite.height / 2));
 }
 
+export function drawStatusBar(
+  ctx: CanvasRenderingContext2D,
+  screenW: number,
+  fuel: number,
+  lives: number,
+  score: number
+) {
+  const scale = 1;
+  const charW = CHAR_W * scale;
+  const charH = CHAR_H * scale;
+  const barHeight = 15;
+
+  // Clear status bar area to black so level content doesn't show through
+  ctx.fillStyle = bbcMicroColours.black;
+  ctx.fillRect(0, 0, screenW, barHeight + 1);
+
+  // --- Yellow border with chamfered bottom corners ---
+  const bL = 2;
+  const bR = screenW - 3;
+  const bT = 0;
+  const bB = barHeight;
+  const corner = 5;
+
+  ctx.fillStyle = bbcMicroColours.yellow;
+  // Top edge
+  ctx.fillRect(bL, bT, bR - bL + 1, 1);
+  // Left edge
+  ctx.fillRect(bL, bT, 1, bB - bT - corner);
+  // Right edge
+  ctx.fillRect(bR, bT, 1, bB - bT - corner);
+  // Bottom edge
+  ctx.fillRect(bL + corner, bB, bR - bL - corner * 2 + 1, 1);
+  // Bottom-left diagonal
+  for (let i = 0; i <= corner; i++) {
+    ctx.fillRect(bL + i, bB - corner + i, 1, 1);
+  }
+  // Bottom-right diagonal
+  for (let i = 0; i <= corner; i++) {
+    ctx.fillRect(bR - i, bB - corner + i, 1, 1);
+  }
+
+  // --- Label positions ---
+  const labelY = 2;
+  const fuelX = 9 + 2 * charW;
+  const livesX = Math.floor((screenW - 5 * charW) / 2);
+  const scoreX = screenW - 9 - 5 * charW - 2 * charW;
+
+  // --- Red decorative double-lines (with gaps for labels) ---
+  const rl1 = labelY + 1;
+  const rl2 = labelY + 3;
+  const gap = 1;
+
+  ctx.fillStyle = bbcMicroColours.red;
+  const segments: [number, number][] = [
+    [bL + 2, fuelX - gap - 1],
+    [fuelX + 4 * charW + gap + 1, livesX - gap - 1],
+    [livesX + 5 * charW + gap + 1, scoreX - gap - 1],
+    [scoreX + 5 * charW + gap + 1, bR - 1],
+  ];
+  for (const [x1, x2] of segments) {
+    if (x2 > x1) {
+      ctx.fillRect(x1, rl1, x2 - x1, 1);
+      ctx.fillRect(x1, rl2, x2 - x1, 1);
+    }
+  }
+
+  // --- Green labels ---
+  drawText(ctx, "FUEL", fuelX, labelY, bbcMicroColours.green, scale);
+  drawText(ctx, "LIVES", livesX, labelY, bbcMicroColours.green, scale);
+  drawText(ctx, "SCORE", scoreX, labelY, bbcMicroColours.green, scale);
+
+  // --- Yellow values ---
+  const valueY = labelY + charH + 2;
+
+  const fuelStr = String(fuel);
+  const fuelValX = fuelX + 4 * charW - fuelStr.length * charW;
+  drawText(ctx, fuelStr, fuelValX, valueY, bbcMicroColours.yellow, scale);
+
+  const livesStr = String(lives);
+  const livesValX = livesX + Math.floor((5 * charW - livesStr.length * charW) / 2);
+  drawText(ctx, livesStr, livesValX, valueY, bbcMicroColours.yellow, scale);
+
+  const scoreStr = String(score);
+  const scoreValX = scoreX + 5 * charW - scoreStr.length * charW;
+  drawText(ctx, scoreStr, scoreValX, valueY, bbcMicroColours.yellow, scale);
+}
+
 export function drawText(
   ctx: CanvasRenderingContext2D,
   text: string,

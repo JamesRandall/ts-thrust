@@ -1,6 +1,7 @@
-import {renderLevel} from "./rendering";
+import {renderLevel, drawStatusBar} from "./rendering";
 import {loadShipSprites} from "./shipSprites";
 import {levels} from "./levels";
+import {createGame, tick} from "./game";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -24,18 +25,11 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-const level = levels[0];
-let playerX = level.startingPosition.x;
-let playerY = level.startingPosition.y;
-let playerRotation = 0;
+const game = createGame(levels[0]);
 
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => { keys.add(e.code); e.preventDefault(); });
 window.addEventListener("keyup", (e) => { keys.delete(e.code); });
-
-const MOVE_SPEED = 60;
-const FULL_ROTATION_TIME = 1.3;
-const ROTATION_SPEED = (Math.PI * 2) / FULL_ROTATION_TIME;
 
 let lastTime = -1;
 
@@ -46,17 +40,13 @@ async function startGame() {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
 
-    if (keys.has("KeyA")) playerRotation -= ROTATION_SPEED * dt;
-    if (keys.has("KeyD")) playerRotation += ROTATION_SPEED * dt;
-
-    if (keys.has("ArrowLeft"))  playerX -= MOVE_SPEED * dt;
-    if (keys.has("ArrowRight")) playerX += MOVE_SPEED * dt;
-    if (keys.has("ArrowUp"))    playerY -= MOVE_SPEED * dt;
-    if (keys.has("ArrowDown"))  playerY += MOVE_SPEED * dt;
+    tick(game, dt, keys);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, level, playerX, playerY, playerRotation, shipSprites, INTERNAL_W, INTERNAL_H);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H);
+
+    drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 
     requestAnimationFrame(frame);
   }
