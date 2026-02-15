@@ -1,6 +1,6 @@
 import { Level } from "./levels";
 import { fillPolygon, Point, bbcMicroColours, WORLD_SCALE_X, WORLD_SCALE_Y, WORLD_WIDTH } from "./rendering";
-import { SpriteMask } from "./shipSprites";
+import { SpriteMask, TurretSprites } from "./shipSprites";
 
 export enum CollisionResult {
   None       = 0,
@@ -35,6 +35,8 @@ export function renderCollisionBuffer(
   level: Level,
   camX: number,
   camY: number,
+  fuelSprite?: ImageBitmap,
+  turretSprites?: TurretSprites,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -72,10 +74,29 @@ export function renderCollisionBuffer(
   drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
   drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
   for (const f of level.fuel) {
-    drawMarker(f.x, f.y, bbcMicroColours.magenta);
+    if (fuelSprite) {
+      const sx = Math.round(toScreenX(f.x));
+      const sy = Math.round(wy(f.y) - camY);
+      const fx = Math.round(sx - fuelSprite.width / 2);
+      const fy = sy - 2;
+      ctx.fillStyle = bbcMicroColours.magenta;
+      ctx.fillRect(fx, fy, fuelSprite.width, fuelSprite.height);
+    } else {
+      drawMarker(f.x, f.y, bbcMicroColours.magenta);
+    }
   }
   for (const t of level.turrets) {
-    drawMarker(t.x, t.y, bbcMicroColours.red);
+    if (turretSprites) {
+      // Use upRight as representative size (all 4 are the same dimensions)
+      const w = turretSprites.upRight.width;
+      const h = turretSprites.upRight.height;
+      const sx = Math.round(toScreenX(t.x));
+      const sy = Math.round(wy(t.y) - camY);
+      ctx.fillStyle = bbcMicroColours.red;
+      ctx.fillRect(sx, sy, w, h);
+    } else {
+      drawMarker(t.x, t.y, bbcMicroColours.red);
+    }
   }
 }
 

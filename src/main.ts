@@ -1,5 +1,6 @@
 import {renderLevel, drawStatusBar, computeCamera, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
-import {loadShipSprites} from "./shipSprites";
+import {loadShipSprites, loadSprite, loadTurretSprites} from "./shipSprites";
+import fuelPng from "./sprites/fuel.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
@@ -26,7 +27,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-const game = createGame(levels[0]);
+let game = createGame(levels[0]);
 const collisionBuf = createCollisionBuffer(INTERNAL_W, INTERNAL_H);
 
 const keys = new Set<string>();
@@ -36,17 +37,30 @@ window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 let lastTime = -1;
 
 async function startGame() {
-  const { sprites: shipSprites, masks: shipMasks } = await loadShipSprites();
+  const [{ sprites: shipSprites, masks: shipMasks }, fuelSprite, turretSprites] = await Promise.all([
+    loadShipSprites(),
+    loadSprite(fuelPng),
+    loadTurretSprites(),
+  ]);
 
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
 
+    // Number keys switch level
+    for (let i = 0; i < levels.length; i++) {
+      if (keys.has(`Digit${i + 1}`)) {
+        game = createGame(levels[i]);
+        keys.delete(`Digit${i + 1}`);
+        break;
+      }
+    }
+
     tick(game, dt, keys);
 
     // Collision detection
     const { camX, camY } = computeCamera(game.player.x, game.player.y, INTERNAL_W, INTERNAL_H);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const sprite = shipSprites[spriteIdx];
@@ -63,7 +77,7 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, INTERNAL_W, INTERNAL_H, fuelSprite, turretSprites);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 

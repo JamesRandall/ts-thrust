@@ -14,8 +14,9 @@ export interface Point {
   y: number;
 }
 
-import { Level } from "./levels";
+import { Level, TurretDirection } from "./levels";
 import { fontData, charIndex, CHAR_W, CHAR_H } from "./font";
+import { TurretSprites } from "./shipSprites";
 
 export function fillPolygon(
   ctx: CanvasRenderingContext2D,
@@ -91,6 +92,39 @@ export function rotationToSpriteIndex(radians: number): number {
   return Math.round(normalized / (twoPi / 32)) % 32;
 }
 
+const tintCanvas = document.createElement('canvas');
+const tintCtx = tintCanvas.getContext('2d')!;
+
+function drawTintedSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: ImageBitmap,
+  x: number,
+  y: number,
+  color: string,
+) {
+  tintCanvas.width = sprite.width;
+  tintCanvas.height = sprite.height;
+  tintCtx.clearRect(0, 0, sprite.width, sprite.height);
+  tintCtx.drawImage(sprite, 0, 0);
+  tintCtx.globalCompositeOperation = 'source-atop';
+  tintCtx.fillStyle = color;
+  tintCtx.fillRect(0, 0, sprite.width, sprite.height);
+  tintCtx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(tintCanvas, x, y);
+}
+
+function getTurretSprite(
+  direction: TurretDirection,
+  sprites: TurretSprites,
+): ImageBitmap {
+  switch (direction) {
+    case 'up_left': return sprites.upLeft;
+    case 'up_right': return sprites.upRight;
+    case 'down_left': return sprites.downLeft;
+    case 'down_right': return sprites.downRight;
+  }
+}
+
 export function renderLevel(
   ctx: CanvasRenderingContext2D,
   level: Level,
@@ -99,7 +133,9 @@ export function renderLevel(
   playerRotation: number,
   shipSprites: ImageBitmap[],
   screenW: number,
-  screenH: number
+  screenH: number,
+  fuelSprite?: ImageBitmap,
+  turretSprites?: TurretSprites,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -139,10 +175,23 @@ export function renderLevel(
   drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
   drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
   for (const f of level.fuel) {
-    drawMarker(f.x, f.y, bbcMicroColours.magenta);
+    if (fuelSprite) {
+      const sx = Math.round(toScreenX(f.x));
+      const sy = Math.round(wy(f.y) - camY);
+      ctx.drawImage(fuelSprite, Math.round(sx - fuelSprite.width / 2), sy - 2);
+    } else {
+      drawMarker(f.x, f.y, bbcMicroColours.magenta);
+    }
   }
   for (const t of level.turrets) {
-    drawMarker(t.x, t.y, bbcMicroColours.red);
+    if (turretSprites) {
+      const sprite = getTurretSprite(t.direction, turretSprites);
+      const sx = Math.round(toScreenX(t.x));
+      const sy = Math.round(wy(t.y) - camY);
+      drawTintedSprite(ctx, sprite, sx, sy, level.turretColor);
+    } else {
+      drawMarker(t.x, t.y, bbcMicroColours.red);
+    }
   }
 
   // Draw player ship (always at screen center)

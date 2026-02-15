@@ -786,11 +786,19 @@ async function main() {
   await framebufferToPng(podFb, path.join(outDir, 'pod.png'), shipPalette);
 
   // Object sprites (auto-cropped, they don't rotate)
+  const fuelPalette = {
+    0: [0, 0, 0],       // black
+    1: [255, 0, 0],     // red (text)
+    2: [255, 255, 0],   // yellow (outline)
+    3: [0, 255, 0],     // green (feet)
+  };
+
   console.log('\nObject sprites:');
   for (let i = 0; i < objectSprites.length; i++) {
     const obj = objectSprites[i];
     const fb = decodeObjectSprite(obj.A, obj.B);
-    await framebufferToPng(fb, path.join(outDir, `obj_${i}_${obj.name}.png`), MODE1_PALETTE);
+    const palette = obj.name === 'fuel' ? fuelPalette : MODE1_PALETTE;
+    await framebufferToPng(fb, path.join(outDir, `obj_${i}_${obj.name}.png`), palette);
   }
 
   // Generate a combined sprite sheet

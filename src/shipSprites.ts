@@ -31,6 +31,28 @@ import ship29 from './sprites/ship_29.png'
 import ship30 from './sprites/ship_30.png'
 import ship31 from './sprites/ship_31.png'
 
+import gunUpLeft from './sprites/gun_up_left.png'
+import gunUpRight from './sprites/gun_up_right.png'
+import gunDownLeft from './sprites/gun_down_left.png'
+import gunDownRight from './sprites/gun_down_right.png'
+
+export interface TurretSprites {
+  upLeft: ImageBitmap;
+  upRight: ImageBitmap;
+  downLeft: ImageBitmap;
+  downRight: ImageBitmap;
+}
+
+export async function loadTurretSprites(): Promise<TurretSprites> {
+  const [upLeft, upRight, downLeft, downRight] = await Promise.all([
+    loadSprite(gunUpLeft),
+    loadSprite(gunUpRight),
+    loadSprite(gunDownLeft),
+    loadSprite(gunDownRight),
+  ]);
+  return { upLeft, upRight, downLeft, downRight };
+}
+
 const spriteUrls: string[] = [
   ship00, ship01, ship02, ship03, ship04, ship05, ship06, ship07,
   ship08, ship09, ship10, ship11, ship12, ship13, ship14, ship15,
@@ -39,6 +61,33 @@ const spriteUrls: string[] = [
 ];
 
 export type SpriteMask = { dx: number; dy: number }[];
+
+export async function loadSprite(url: string): Promise<ImageBitmap> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    if (r < 128 && g < 128 && b < 128) {
+      data[i + 3] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return createImageBitmap(canvas);
+}
 
 export async function loadShipSprites(): Promise<{ sprites: ImageBitmap[]; masks: SpriteMask[] }> {
   const results = await Promise.all(spriteUrls.map(async (url) => {
