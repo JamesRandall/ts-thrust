@@ -101,29 +101,19 @@ export function updateScroll(
   // --- X axis ---
   const midpointViewX = midpointWorld.x - state.windowPos.x;
 
-  const xOffset = midpointViewX - config.xScrollLeftTrigger;
-  if (xOffset < 0) {
-    state.scrollSpeed.x = xOffset; // negative — scroll left
+  if (midpointViewX < config.xScrollLeftTrigger) {
+    // Outside dead zone left — scroll speed proportional to overshoot
+    state.scrollSpeed.x = midpointViewX - config.xScrollLeftTrigger;
+  } else if (midpointViewX > config.xScrollRightTrigger) {
+    // Outside dead zone right
+    state.scrollSpeed.x = midpointViewX - config.xScrollRightTrigger;
   } else {
-    const rightOverflow = midpointViewX - config.xScrollRightTrigger;
-    if (rightOverflow > 0) {
-      state.scrollSpeed.x = rightOverflow; // positive — scroll right
+    // Inside dead zone — decelerate toward zero (float-safe, no sign-flip)
+    if (state.scrollSpeed.x > 0) {
+      state.scrollSpeed.x = Math.max(0, state.scrollSpeed.x - 1);
+    } else if (state.scrollSpeed.x < 0) {
+      state.scrollSpeed.x = Math.min(0, state.scrollSpeed.x + 1);
     }
-  }
-
-  // Brake zone for X
-  if (state.scrollSpeed.x > 0 && midpointViewX < config.xBrakeLeftStop) {
-    state.scrollSpeed.x = 0;
-  } else if (state.scrollSpeed.x > 0 && midpointViewX < config.xScrollRightTrigger) {
-    state.scrollSpeed.x--;
-    if (state.scrollSpeed.x === 0) state.scrollSpeed.x = 1;
-  }
-
-  if (state.scrollSpeed.x < 0 && midpointViewX > config.xBrakeRightStop) {
-    state.scrollSpeed.x = 0;
-  } else if (state.scrollSpeed.x < 0 && midpointViewX > config.xScrollLeftTrigger) {
-    state.scrollSpeed.x++;
-    if (state.scrollSpeed.x === 0) state.scrollSpeed.x = -1;
   }
 
   // Apply scroll to window position
