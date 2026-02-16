@@ -801,11 +801,15 @@ async function main() {
   await framebufferToPng(podFb, path.join(outDir, 'pod.png'), shipPalette);
 
   // Object sprites (auto-cropped, they don't rotate)
+  // All object sprites use the same source palette:
+  //   colour 1 → red (remapped to yellow at runtime)
+  //   colour 2 → yellow (remapped to landscape colour at runtime)
+  //   colour 3 → white (remapped to object colour at runtime)
   const fuelPalette = {
     0: [0, 0, 0],       // black
-    1: [255, 0, 0],     // red (text)
-    2: [255, 255, 0],   // yellow (outline)
-    3: [0, 255, 0],     // green (feet)
+    1: [255, 0, 0],     // red   → colour 1
+    2: [255, 255, 0],   // yellow → colour 2
+    3: [255, 255, 255], // white  → colour 3
   };
 
   console.log('\nObject sprites:');

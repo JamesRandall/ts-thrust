@@ -125,21 +125,45 @@ function drawWhiteReplacedSprite(
   ctx.drawImage(tintCanvas, x, y);
 }
 
-function drawTintedSprite(
+/**
+ * Remap source sprite placeholder colours to the level palette:
+ *   White (255,255,255) → colour3 (object colour, per level)
+ *   Red   (255,0,0)     → colour1 (always yellow)
+ *   Other non-black      → colour2 (landscape colour, per level)
+ */
+function drawRemappedSprite(
   ctx: CanvasRenderingContext2D,
   sprite: ImageBitmap,
   x: number,
   y: number,
-  color: string,
+  colour3: string,
+  colour2: string,
 ) {
   tintCanvas.width = sprite.width;
   tintCanvas.height = sprite.height;
   tintCtx.clearRect(0, 0, sprite.width, sprite.height);
   tintCtx.drawImage(sprite, 0, 0);
-  tintCtx.globalCompositeOperation = 'source-atop';
-  tintCtx.fillStyle = color;
-  tintCtx.fillRect(0, 0, sprite.width, sprite.height);
-  tintCtx.globalCompositeOperation = 'source-over';
+  const imageData = tintCtx.getImageData(0, 0, sprite.width, sprite.height);
+  const data = imageData.data;
+  const [c3r, c3g, c3b] = parseHexColor(colour3);
+  const [c2r, c2g, c2b] = parseHexColor(colour2);
+  // Colour 1 is always yellow
+  const c1r = 255, c1g = 255, c1b = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue;
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if (r === 255 && g === 255 && b === 255) {
+      // White → colour 3 (object colour)
+      data[i] = c3r; data[i + 1] = c3g; data[i + 2] = c3b;
+    } else if (r === 255 && g === 0 && b === 0) {
+      // Red → colour 1 (yellow)
+      data[i] = c1r; data[i + 1] = c1g; data[i + 2] = c1b;
+    } else if (r > 0 || g > 0 || b > 0) {
+      // Other non-black → colour 2 (landscape colour)
+      data[i] = c2r; data[i + 1] = c2g; data[i + 2] = c2b;
+    }
+  }
+  tintCtx.putImageData(imageData, 0, 0);
   ctx.drawImage(tintCanvas, x, y);
 }
 
@@ -207,14 +231,14 @@ export function renderLevel(
   if (powerPlantSprite) {
     const sx = Math.round(toScreenX(level.powerPlant.x));
     const sy = Math.round(wy(level.powerPlant.y) - camY);
-    drawWhiteReplacedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor);
+    drawRemappedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor, level.terrainColor);
   } else {
     drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
   }
   if (podStandSprite) {
     const sx = Math.round(toScreenX(level.podPedestal.x));
     const sy = Math.round(wy(level.podPedestal.y) - camY);
-    drawWhiteReplacedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor);
+    drawRemappedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor, level.terrainColor);
   } else {
     drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
   }
@@ -222,7 +246,7 @@ export function renderLevel(
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
       const sy = Math.round(wy(f.y) - camY);
-      ctx.drawImage(fuelSprite, Math.round(sx - fuelSprite.width / 2), sy - 2);
+      drawRemappedSprite(ctx, fuelSprite, Math.round(sx - fuelSprite.width / 2), sy - 2, level.objectColor, level.terrainColor);
     } else {
       drawMarker(f.x, f.y, bbcMicroColours.magenta);
     }
@@ -232,7 +256,7 @@ export function renderLevel(
       const sprite = getTurretSprite(t.direction, turretSprites);
       const sx = Math.round(toScreenX(t.x));
       const sy = Math.round(wy(t.y) - camY);
-      drawTintedSprite(ctx, sprite, sx, sy - 1, level.objectColor);
+      drawRemappedSprite(ctx, sprite, sx, sy - 1, level.objectColor, level.terrainColor);
     } else {
       drawMarker(t.x, t.y, bbcMicroColours.red);
     }
