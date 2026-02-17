@@ -6,6 +6,7 @@ import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
 import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
 import { ExplosionState, createExplosionState, tickExplosions } from "./explosions";
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
+import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -37,6 +38,8 @@ export interface GameState {
   destroyedFuel: Set<number>;
   explosions: ExplosionState;
   fuelCollection: FuelCollectionState;
+  generator: GeneratorState;
+  planetKilled: boolean;
 }
 
 export function createGame(level: Level): GameState {
@@ -76,6 +79,8 @@ export function createGame(level: Level): GameState {
     destroyedFuel: new Set(),
     explosions: createExplosionState(),
     fuelCollection: createFuelCollectionState(level.fuel.length),
+    generator: createGeneratorState(),
+    planetKilled: false,
   };
 }
 
@@ -118,6 +123,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
       320,
       256,
       state.destroyedTurrets,
+      !canTurretsFire(state.generator),
     );
 
     tickPlayerShooting(
@@ -134,6 +140,11 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     tickPlayerBullets(state.playerShooting);
 
     tickExplosions(state.explosions);
+
+    const genResult = tickGenerator(state.generator, state.explosions, state.level, state.destroyedTurrets, state.destroyedFuel);
+    if (genResult.playerKilled) {
+      state.planetKilled = true;
+    }
 
     tickFuelCollection(
       state.fuelCollection,
@@ -179,4 +190,6 @@ export function resetGame(state: GameState): void {
   state.destroyedFuel.clear();
   state.explosions.particles = [];
   state.fuelCollection = createFuelCollectionState(state.level.fuel.length);
+  state.generator = createGeneratorState();
+  state.planetKilled = false;
 }

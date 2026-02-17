@@ -196,6 +196,8 @@ export function renderLevel(
   shieldSprite?: ImageBitmap,
   destroyedTurrets?: Set<number>,
   destroyedFuel?: Set<number>,
+  generatorDestroyed?: boolean,
+  generatorVisible?: boolean,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -230,12 +232,14 @@ export function renderLevel(
     ctx.fillRect(sx - 3, sy - 3, 7, 7);
   };
 
-  if (powerPlantSprite) {
-    const sx = Math.round(toScreenX(level.powerPlant.x));
-    const sy = Math.round(wy(level.powerPlant.y) - camY);
-    drawRemappedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor, level.terrainColor);
-  } else {
-    drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
+  if (!generatorDestroyed && (generatorVisible ?? true)) {
+    if (powerPlantSprite) {
+      const sx = Math.round(toScreenX(level.powerPlant.x));
+      const sy = Math.round(wy(level.powerPlant.y) - camY);
+      drawRemappedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor, level.terrainColor);
+    } else {
+      drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
+    }
   }
   if (podStandSprite) {
     const sx = Math.round(toScreenX(level.podPedestal.x));

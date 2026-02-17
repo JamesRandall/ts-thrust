@@ -13,7 +13,6 @@ export interface Bullet {
 export interface TurretFiringState {
   bullets: Bullet[];
   shootProbability: number;
-  generatorRechargeCounter: number;
   tickCounter: number;
 }
 
@@ -37,7 +36,6 @@ export function createTurretFiringState(): TurretFiringState {
   return {
     bullets: [],
     shootProbability: 1,
-    generatorRechargeCounter: 0,
     tickCounter: 0,
   };
 }
@@ -52,20 +50,14 @@ export function tickTurrets(
   viewportW: number,
   viewportH: number,
   destroyedTurrets?: Set<number>,
+  gunsSuppressed?: boolean,
 ): void {
-  // Decrement generator recharge every other tick
-  if (state.generatorRechargeCounter > 0) {
-    if ((state.tickCounter & 0x01) === 0) {
-      state.generatorRechargeCounter--;
-    }
-  }
-
   // Process each turret
   for (let i = 0; i < level.turrets.length; i++) {
     if (destroyedTurrets?.has(i)) continue;
     const turret = level.turrets[i];
     // Gate: generator ceasefire
-    if (state.generatorRechargeCounter > 0) continue;
+    if (gunsSuppressed) continue;
 
     // Gate: visibility — convert turret world pos to screen
     const screenX = turret.x * WORLD_SCALE_X - camX;
@@ -284,6 +276,9 @@ export function renderPlayerBullets(
 export interface BulletHitResult {
   hitTurrets: number[];
   hitFuel: number[];
+  hitGenerator: boolean;
+  generatorHitX: number;
+  generatorHitY: number;
 }
 
 export function processPlayerBulletCollisions(
@@ -296,7 +291,7 @@ export function processPlayerBulletCollisions(
   destroyedTurrets: Set<number>,
   destroyedFuel: Set<number>,
 ): BulletHitResult {
-  const result: BulletHitResult = { hitTurrets: [], hitFuel: [] };
+  const result: BulletHitResult = { hitTurrets: [], hitFuel: [], hitGenerator: false, generatorHitX: 0, generatorHitY: 0 };
   const { data, width, height } = imageData;
 
   for (const bullet of state.bullets) {
@@ -304,7 +299,7 @@ export function processPlayerBulletCollisions(
     const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
     const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
 
-    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' = 'none';
+    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' = 'none';
 
     for (let px = 0; px < 2 && hitColor === 'none'; px++) {
       for (let py = 0; py < 2 && hitColor === 'none'; py++) {
@@ -319,6 +314,7 @@ export function processPlayerBulletCollisions(
         if (r === 0 && g === 0 && b === 0) continue;
         if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
         else if (r === 255 && g === 0 && b === 255) { hitColor = 'fuel'; }
+        else if (r === 0 && g === 255 && b === 255) { hitColor = 'generator'; }
         else { hitColor = 'terrain'; }
       }
     }
@@ -350,6 +346,10 @@ export function processPlayerBulletCollisions(
         if (dist < bestDist) { bestDist = dist; bestIdx = i; }
       }
       if (bestIdx >= 0) result.hitFuel.push(bestIdx);
+    } else if (hitColor === 'generator') {
+      result.hitGenerator = true;
+      result.generatorHitX = bullet.x;
+      result.generatorHitY = bullet.y;
     }
   }
 

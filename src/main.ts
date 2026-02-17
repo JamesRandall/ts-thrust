@@ -10,6 +10,7 @@ import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionRe
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
 import {renderFuelBeams} from "./fuelCollection";
+import {handleGeneratorHit} from "./generator";
 import {bbcMicroColours} from "./rendering";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -70,10 +71,18 @@ async function startGame() {
 
     tick(game, dt, keys);
 
+    // Planet self-destruct countdown reached 0
+    if (game.planetKilled) {
+      resetGame(game);
+      game.planetKilled = false;
+      requestAnimationFrame(frame);
+      return;
+    }
+
     // Camera from scroll state
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
 
     // Remove bullets that hit terrain/objects
@@ -100,6 +109,10 @@ async function startGame() {
       spawnExplosion(game.explosions, f.x + 2, f.y + 4, fuelExplosionColour);
       game.score += 150;
     }
+    // Generator hit
+    if (bulletHits.hitGenerator && !game.generator.destroyed) {
+      handleGeneratorHit(game.generator, game.explosions, bulletHits.generatorHitX, bulletHits.generatorHitY);
+    }
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const center = shipCenters[spriteIdx];
@@ -122,7 +135,7 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible);
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
@@ -130,6 +143,14 @@ async function startGame() {
     renderFuelBeams(ctx, game.fuelCollection, shipScreenX, shipScreenY);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
+
+    // Planet self-destruct countdown display
+    if (game.generator.planetCountdown >= 0) {
+      const countdownStr = String(game.generator.planetCountdown);
+      const cx = Math.floor((INTERNAL_W - countdownStr.length * 8) / 2);
+      const cy = Math.floor(INTERNAL_H / 2);
+      drawText(ctx, countdownStr, cx, cy, bbcMicroColours.white);
+    }
 
     // FPS counter (toggle with F)
     if (keys.has("KeyF")) {
