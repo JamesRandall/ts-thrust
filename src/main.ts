@@ -9,6 +9,7 @@ import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
+import {renderFuelBeams} from "./fuelCollection";
 import {bbcMicroColours} from "./rendering";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -126,6 +127,7 @@ async function startGame() {
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
     renderExplosions(ctx, game.explosions, camX, camY);
+    renderFuelBeams(ctx, game.fuelCollection, shipScreenX, shipScreenY);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 

@@ -5,6 +5,7 @@ import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updat
 import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
 import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
 import { ExplosionState, createExplosionState, tickExplosions } from "./explosions";
+import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -35,6 +36,7 @@ export interface GameState {
   destroyedTurrets: Set<number>;
   destroyedFuel: Set<number>;
   explosions: ExplosionState;
+  fuelCollection: FuelCollectionState;
 }
 
 export function createGame(level: Level): GameState {
@@ -73,6 +75,7 @@ export function createGame(level: Level): GameState {
     destroyedTurrets: new Set(),
     destroyedFuel: new Set(),
     explosions: createExplosionState(),
+    fuelCollection: createFuelCollectionState(level.fuel.length),
   };
 }
 
@@ -131,6 +134,17 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     tickPlayerBullets(state.playerShooting);
 
     tickExplosions(state.explosions);
+
+    tickFuelCollection(
+      state.fuelCollection,
+      state.level,
+      state.player.x,
+      state.player.y,
+      state.shieldActive,
+      state.physics.state.podAttached,
+      state.destroyedFuel,
+      state,
+    );
   }
 }
 
@@ -164,4 +178,5 @@ export function resetGame(state: GameState): void {
   state.destroyedTurrets.clear();
   state.destroyedFuel.clear();
   state.explosions.particles = [];
+  state.fuelCollection = createFuelCollectionState(state.level.fuel.length);
 }
