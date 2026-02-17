@@ -207,7 +207,7 @@ function generateWallPolygon(
 
     for (let i = 0; i < countTable.length; i++) {
         const count = countTable[i];
-        const inc = toSigned(incrementTable[i]);
+        const inc = incrementTable[i];
 
         // Terminal sentinel: 0xFF with inc=0 AFTER the initial sky segments
         if (count === 0xff && inc === 0 && i > 1) break;
@@ -218,8 +218,8 @@ function generateWallPolygon(
             continue;
         }
 
-        // Advance through the segment
-        x += count * inc;
+        // Advance through the segment using 8-bit wrapping (matches 6502 byte arithmetic)
+        x = (x + count * inc) & 0xFF;
         row += count;
         const endY = (row - 1) - yOffset;
 

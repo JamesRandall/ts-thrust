@@ -223,9 +223,9 @@ export function tickPlayerShooting(
   // Create bullet
   state.pressedFire = true;
 
-  // Spawn at ship centre (offsets in world coords)
-  slot.x = shipX + 4 / WORLD_SCALE_X;
-  slot.y = shipY + 5 / WORLD_SCALE_Y;
+  // Spawn at ship centre (world position is already centre of mass)
+  slot.x = shipX;
+  slot.y = shipY;
 
   // Velocity from ship angle
   const angleIdx = Math.round(shipAngle) & 0x1F;
