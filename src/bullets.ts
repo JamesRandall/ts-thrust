@@ -356,7 +356,7 @@ export function processPlayerBulletCollisions(
   return result;
 }
 
-export function testBulletShipCollision(
+export function removeBulletsHittingShip(
   bullets: Bullet[],
   shipMask: SpriteMask,
   shipScreenX: number,
@@ -370,18 +370,26 @@ export function testBulletShipCollision(
     shipPixels.add(`${shipScreenX + dx},${shipScreenY + dy}`);
   }
 
-  for (const bullet of bullets) {
+  let hit = false;
+
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const bullet = bullets[i];
     const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
     const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
     // Check all 4 pixels of the 2×2 bullet
-    for (let px = 0; px < 2; px++) {
-      for (let py = 0; py < 2; py++) {
+    let collided = false;
+    for (let px = 0; px < 2 && !collided; px++) {
+      for (let py = 0; py < 2 && !collided; py++) {
         if (shipPixels.has(`${bx + px},${by + py}`)) {
-          return true;
+          collided = true;
         }
       }
     }
+    if (collided) {
+      bullets.splice(i, 1);
+      hit = true;
+    }
   }
 
-  return false;
+  return hit;
 }

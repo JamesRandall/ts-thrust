@@ -7,8 +7,9 @@ import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
-import {renderBullets, testBulletShipCollision, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
-import {renderExplosions, spawnExplosion} from "./explosions";
+import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
+import {renderExplosions, spawnExplosion, orColours} from "./explosions";
+import {bbcMicroColours} from "./rendering";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -41,6 +42,7 @@ window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 
 let lastTime = -1;
 let fps = 0;
+let showFps = false;
 
 async function startGame() {
   const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite] = await Promise.all([
@@ -82,16 +84,19 @@ async function startGame() {
       game.level.turrets, game.level.fuel,
       game.destroyedTurrets, game.destroyedFuel,
     );
+    // Gun explosions: type 2 ($0F) = colour 1 = yellow
     for (const idx of bulletHits.hitTurrets) {
       game.destroyedTurrets.add(idx);
       const t = game.level.turrets[idx];
-      spawnExplosion(game.explosions, t.x + 2, t.y + 4);
+      spawnExplosion(game.explosions, t.x + 2, t.y + 4, bbcMicroColours.yellow);
       game.score += 750;
     }
+    // Fuel explosions: type 1 ($FF) = both landscape + object colours combined
+    const fuelExplosionColour = orColours(game.level.terrainColor, game.level.objectColor);
     for (const idx of bulletHits.hitFuel) {
       game.destroyedFuel.add(idx);
       const f = game.level.fuel[idx];
-      spawnExplosion(game.explosions, f.x + 2, f.y + 4);
+      spawnExplosion(game.explosions, f.x + 2, f.y + 4, fuelExplosionColour);
       game.score += 150;
     }
 
@@ -107,8 +112,9 @@ async function startGame() {
       resetGame(game);
     }
 
-    // Bullet-ship collision
-    if (testBulletShipCollision(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY)) {
+    // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
+    const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
+    if (bulletHitShip && !game.shieldActive) {
       resetGame(game);
     }
 
@@ -119,16 +125,22 @@ async function startGame() {
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
-    renderExplosions(ctx, game.explosions, camX, camY, game.level.terrainColor);
+    renderExplosions(ctx, game.explosions, camX, camY);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 
-    // FPS counter
-    if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
-    const fpsText = String(Math.round(fps));
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, INTERNAL_H - 7, fpsText.length * 8 + 2, 7);
-    drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
+    // FPS counter (toggle with F)
+    if (keys.has("KeyF")) {
+      showFps = !showFps;
+      keys.delete("KeyF");
+    }
+    if (showFps) {
+      if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
+      const fpsText = String(Math.round(fps));
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, INTERNAL_H - 7, fpsText.length * 8 + 2, 7);
+      drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
+    }
 
     requestAnimationFrame(frame);
   }

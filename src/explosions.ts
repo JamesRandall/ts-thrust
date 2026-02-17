@@ -7,6 +7,7 @@ export interface ExplosionParticle {
   dx: number;
   dy: number;
   lifetime: number;
+  color: string;
 }
 
 export interface ExplosionState {
@@ -21,7 +22,7 @@ function randomByte(): number {
   return Math.floor(Math.random() * 256);
 }
 
-export function spawnExplosion(state: ExplosionState, worldX: number, worldY: number): void {
+export function spawnExplosion(state: ExplosionState, worldX: number, worldY: number, color: string): void {
   let explosionAngle = randomByte() & 0x1F; // random starting angle 0–31
 
   for (let p = 0; p < 8; p++) {
@@ -50,7 +51,7 @@ export function spawnExplosion(state: ExplosionState, worldX: number, worldY: nu
     const x = worldX + dx * 2;
     const y = worldY + dy * 2;
 
-    state.particles.push({ x, y, dx, dy, lifetime });
+    state.particles.push({ x, y, dx, dy, lifetime, color });
 
     // Advance explosion angle by 4 per particle (8×4 = 32, full circle)
     explosionAngle = (explosionAngle + 4) & 0x1F;
@@ -69,15 +70,21 @@ export function tickExplosions(state: ExplosionState): void {
   }
 }
 
+/** OR two hex colour strings to produce the $FF "both colours" result. */
+export function orColours(a: string, b: string): string {
+  const av = parseInt(a.slice(1), 16);
+  const bv = parseInt(b.slice(1), 16);
+  return '#' + (av | bv).toString(16).padStart(6, '0');
+}
+
 export function renderExplosions(
   ctx: CanvasRenderingContext2D,
   state: ExplosionState,
   camX: number,
   camY: number,
-  colour: string,
 ): void {
-  ctx.fillStyle = colour;
   for (const p of state.particles) {
+    ctx.fillStyle = p.color;
     const sx = Math.round(p.x * WORLD_SCALE_X - camX);
     const sy = Math.round(p.y * WORLD_SCALE_Y - camY);
     ctx.fillRect(sx, sy, 2, 2);
