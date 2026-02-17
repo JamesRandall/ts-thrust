@@ -7,6 +7,7 @@ import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
+import {renderBullets, testBulletShipCollision, removeCollidingBullets} from "./bullets";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -69,6 +70,10 @@ async function startGame() {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
+    const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
+
+    // Remove bullets that hit terrain
+    removeCollidingBullets(game.turretFiring, collisionImageData, camX, camY);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const center = shipCenters[spriteIdx];
@@ -82,10 +87,17 @@ async function startGame() {
       resetGame(game);
     }
 
+    // Bullet-ship collision
+    if (testBulletShipCollision(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY)) {
+      resetGame(game);
+    }
+
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined);
+
+    renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 

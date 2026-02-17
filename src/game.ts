@@ -3,6 +3,7 @@ import { Physics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
 import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
+import { TurretFiringState, createTurretFiringState, tickTurrets } from "./bullets";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -28,6 +29,7 @@ export interface GameState {
   scroll: ScrollState;
   scrollConfig: ScrollConfig;
   scrollAccumulator: number;
+  turretFiring: TurretFiringState;
 }
 
 export function createGame(level: Level): GameState {
@@ -61,6 +63,7 @@ export function createGame(level: Level): GameState {
     scroll,
     scrollConfig,
     scrollAccumulator: 0,
+    turretFiring: createTurretFiringState(),
   };
 }
 
@@ -90,6 +93,19 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
       state.scroll,
       state.scrollConfig,
     );
+
+    const camX = Math.round(state.scroll.windowPos.x * WORLD_SCALE_X);
+    const camY = Math.round(state.scroll.windowPos.y * WORLD_SCALE_Y);
+    tickTurrets(
+      state.turretFiring,
+      state.level,
+      state.player.x,
+      state.player.y,
+      camX,
+      camY,
+      320,
+      256,
+    );
   }
 }
 
@@ -116,4 +132,5 @@ export function resetGame(state: GameState): void {
   state.scroll.scrollSpeed.x = 0;
   state.scroll.scrollSpeed.y = 0;
   state.scrollAccumulator = 0;
+  state.turretFiring.bullets = [];
 }

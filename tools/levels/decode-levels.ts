@@ -28,7 +28,7 @@ import * as fs from "fs";
 type Polygon = Array<number>;
 type ObjectPosition = { x: number; y: number };
 type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';
-type TurretPosition = ObjectPosition & { direction: TurretDirection };
+type TurretPosition = ObjectPosition & { direction: TurretDirection; gunParam: number };
 
 type Level = {
     name: string;
@@ -273,7 +273,7 @@ function decodeObjects(levelIndex: number) {
         const type = obj.types[i];
         const pos: ObjectPosition = { x: obj.posX[i], y: obj.posYE[i] * 256 + obj.posY[i] };
 
-        if (isGunType(type)) turrets.push({ ...pos, direction: gunTypeToDirection[type] });
+        if (isGunType(type)) turrets.push({ ...pos, direction: gunTypeToDirection[type], gunParam: obj.gunParams[i] });
         else if (type === OBJECT_FUEL) fuel.push(pos);
         else if (type === OBJECT_POD_STAND) podPedestal = pos;
         else if (type === OBJECT_GENERATOR) powerPlant = pos;
@@ -359,7 +359,7 @@ function generateOutput(levels: Level[]): string {
     lines.push(`export type Polygon = Array<number>;`);
     lines.push(`export type ObjectPosition = { x: number, y: number};`);
     lines.push(`export type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';`);
-    lines.push(`export type TurretPosition = ObjectPosition & { direction: TurretDirection };`);
+    lines.push(`export type TurretPosition = ObjectPosition & { direction: TurretDirection; gunParam: number };`);
     lines.push(``);
     lines.push(`export type Level = {`);
     lines.push(`    name: string;`);
@@ -399,7 +399,7 @@ function generateOutput(levels: Level[]): string {
             lines.push(`            ${formatPolygon(level.polygons[p], "            ")},`);
         }
         lines.push(`        ],`);
-        lines.push(`        turrets: [${level.turrets.map(t => `\n            { x: ${t.x}, y: ${t.y}, direction: '${t.direction}' }`).join(",")}${level.turrets.length > 0 ? ",\n        " : ""}],`);
+        lines.push(`        turrets: [${level.turrets.map(t => `\n            { x: ${t.x}, y: ${t.y}, direction: '${t.direction}', gunParam: 0x${t.gunParam.toString(16).padStart(2, '0')} }`).join(",")}${level.turrets.length > 0 ? ",\n        " : ""}],`);
         lines.push(`        powerPlant: ${formatPosition(level.powerPlant)},`);
         lines.push(`        podPedestal: ${formatPosition(level.podPedestal)},`);
         lines.push(`        fuel: [${level.fuel.map(f => `\n            ${formatPosition(f)}`).join(",")}${level.fuel.length > 0 ? ",\n        " : ""}],`);
