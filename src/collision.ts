@@ -39,6 +39,8 @@ export function renderCollisionBuffer(
   turretSprites?: TurretSprites,
   powerPlantSprite?: ImageBitmap,
   podStandSprite?: ImageBitmap,
+  destroyedTurrets?: Set<number>,
+  destroyedFuel?: Set<number>,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -89,7 +91,9 @@ export function renderCollisionBuffer(
   } else {
     drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
   }
-  for (const f of level.fuel) {
+  for (let i = 0; i < level.fuel.length; i++) {
+    if (destroyedFuel?.has(i)) continue;
+    const f = level.fuel[i];
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
       const sy = Math.round(wy(f.y) - camY);
@@ -101,7 +105,9 @@ export function renderCollisionBuffer(
       drawMarker(f.x, f.y, bbcMicroColours.magenta);
     }
   }
-  for (const t of level.turrets) {
+  for (let i = 0; i < level.turrets.length; i++) {
+    if (destroyedTurrets?.has(i)) continue;
+    const t = level.turrets[i];
     if (turretSprites) {
       // Use upRight as representative size (all 4 are the same dimensions)
       const w = turretSprites.upRight.width;

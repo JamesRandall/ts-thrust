@@ -3,7 +3,8 @@ import { Physics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
 import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
-import { TurretFiringState, createTurretFiringState, tickTurrets } from "./bullets";
+import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
+import { ExplosionState, createExplosionState, tickExplosions } from "./explosions";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -30,6 +31,10 @@ export interface GameState {
   scrollConfig: ScrollConfig;
   scrollAccumulator: number;
   turretFiring: TurretFiringState;
+  playerShooting: PlayerShootingState;
+  destroyedTurrets: Set<number>;
+  destroyedFuel: Set<number>;
+  explosions: ExplosionState;
 }
 
 export function createGame(level: Level): GameState {
@@ -64,6 +69,10 @@ export function createGame(level: Level): GameState {
     scrollConfig,
     scrollAccumulator: 0,
     turretFiring: createTurretFiringState(),
+    playerShooting: createPlayerShootingState(),
+    destroyedTurrets: new Set(),
+    destroyedFuel: new Set(),
+    explosions: createExplosionState(),
   };
 }
 
@@ -105,7 +114,23 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
       camY,
       320,
       256,
+      state.destroyedTurrets,
     );
+
+    tickPlayerShooting(
+      state.playerShooting,
+      keys.has("Enter"),
+      state.shieldActive,
+      state.physics.state.angle,
+      state.player.x,
+      state.player.y,
+      state.physics.state.forceX,
+      state.physics.state.forceY,
+    );
+
+    tickPlayerBullets(state.playerShooting);
+
+    tickExplosions(state.explosions);
   }
 }
 
@@ -133,4 +158,10 @@ export function resetGame(state: GameState): void {
   state.scroll.scrollSpeed.y = 0;
   state.scrollAccumulator = 0;
   state.turretFiring.bullets = [];
+  for (const b of state.playerShooting.bullets) b.active = false;
+  state.playerShooting.bulletIndex = 0;
+  state.playerShooting.pressedFire = false;
+  state.destroyedTurrets.clear();
+  state.destroyedFuel.clear();
+  state.explosions.particles = [];
 }

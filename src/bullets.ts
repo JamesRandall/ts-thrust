@@ -51,6 +51,7 @@ export function tickTurrets(
   camY: number,
   viewportW: number,
   viewportH: number,
+  destroyedTurrets?: Set<number>,
 ): void {
   // Decrement generator recharge every other tick
   if (state.generatorRechargeCounter > 0) {
@@ -60,7 +61,9 @@ export function tickTurrets(
   }
 
   // Process each turret
-  for (const turret of level.turrets) {
+  for (let i = 0; i < level.turrets.length; i++) {
+    if (destroyedTurrets?.has(i)) continue;
+    const turret = level.turrets[i];
     // Gate: generator ceasefire
     if (state.generatorRechargeCounter > 0) continue;
 
@@ -156,6 +159,201 @@ export function removeCollidingBullets(
     }
     return true;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Player shooting
+// ---------------------------------------------------------------------------
+
+export interface PlayerBullet {
+  x: number; y: number;
+  dx: number; dy: number;
+  active: boolean;
+  lifetime: number;
+}
+
+export interface PlayerShootingState {
+  bullets: PlayerBullet[];   // exactly 4 slots (round-robin)
+  bulletIndex: number;       // 0-3, advances after each shot
+  pressedFire: boolean;      // single-shot latch
+}
+
+export function createPlayerShootingState(): PlayerShootingState {
+  return {
+    bullets: [
+      { x: 0, y: 0, dx: 0, dy: 0, active: false, lifetime: 0 },
+      { x: 0, y: 0, dx: 0, dy: 0, active: false, lifetime: 0 },
+      { x: 0, y: 0, dx: 0, dy: 0, active: false, lifetime: 0 },
+      { x: 0, y: 0, dx: 0, dy: 0, active: false, lifetime: 0 },
+    ],
+    bulletIndex: 0,
+    pressedFire: false,
+  };
+}
+
+export function tickPlayerShooting(
+  state: PlayerShootingState,
+  fireKeyDown: boolean,
+  shieldActive: boolean,
+  shipAngle: number,
+  shipX: number,
+  shipY: number,
+  shipVX: number,
+  shipVY: number,
+): void {
+  // Gate 1: pod destroying player — skip for now (not implemented)
+
+  // Gate 2: shield/fire mutual exclusion
+  if (shieldActive) {
+    state.pressedFire = true;
+    return;
+  }
+
+  // Gate 3: single-shot latch
+  if (!fireKeyDown) {
+    state.pressedFire = false;
+    return;
+  }
+  if (state.pressedFire) return;
+
+  // Slot availability check
+  const slot = state.bullets[state.bulletIndex];
+  if (slot.active) return; // slot occupied — cannot fire
+
+  // Create bullet
+  state.pressedFire = true;
+
+  // Spawn at ship centre (offsets in world coords)
+  slot.x = shipX + 4 / WORLD_SCALE_X;
+  slot.y = shipY + 5 / WORLD_SCALE_Y;
+
+  // Velocity from ship angle
+  const angleIdx = Math.round(shipAngle) & 0x1F;
+  slot.dx = ANGLE_X[angleIdx];
+  slot.dy = ANGLE_Y[angleIdx];
+
+  // Inherit ship velocity
+  slot.dx += shipVX;
+  slot.dy += shipVY;
+
+  // Advance 2 steps to clear ship sprite (after full velocity is set)
+  slot.x += slot.dx * 2;
+  slot.y += slot.dy * 2;
+
+  slot.active = true;
+  slot.lifetime = 40;
+
+  // Advance round-robin index
+  state.bulletIndex = (state.bulletIndex + 1) & 0x03;
+}
+
+export function tickPlayerBullets(
+  state: PlayerShootingState,
+): void {
+  for (const bullet of state.bullets) {
+    if (!bullet.active) continue;
+    bullet.x += bullet.dx;
+    bullet.y += bullet.dy;
+    bullet.lifetime--;
+    if (bullet.lifetime <= 0) {
+      bullet.active = false;
+    }
+  }
+}
+
+export function renderPlayerBullets(
+  ctx: CanvasRenderingContext2D,
+  state: PlayerShootingState,
+  camX: number,
+  camY: number,
+  colour: string,
+): void {
+  ctx.fillStyle = colour;
+  for (const bullet of state.bullets) {
+    if (!bullet.active) continue;
+    const sx = Math.round(bullet.x * WORLD_SCALE_X - camX);
+    const sy = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Player bullet collision via collision buffer (pixel-accurate)
+// ---------------------------------------------------------------------------
+
+export interface BulletHitResult {
+  hitTurrets: number[];
+  hitFuel: number[];
+}
+
+export function processPlayerBulletCollisions(
+  state: PlayerShootingState,
+  imageData: ImageData,
+  camX: number,
+  camY: number,
+  turrets: readonly { x: number; y: number }[],
+  fuel: readonly { x: number; y: number }[],
+  destroyedTurrets: Set<number>,
+  destroyedFuel: Set<number>,
+): BulletHitResult {
+  const result: BulletHitResult = { hitTurrets: [], hitFuel: [] };
+  const { data, width, height } = imageData;
+
+  for (const bullet of state.bullets) {
+    if (!bullet.active) continue;
+    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
+    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+
+    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' = 'none';
+
+    for (let px = 0; px < 2 && hitColor === 'none'; px++) {
+      for (let py = 0; py < 2 && hitColor === 'none'; py++) {
+        const x = bx + px;
+        const y = by + py;
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        const idx = (y * width + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+
+        if (r === 0 && g === 0 && b === 0) continue;
+        if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
+        else if (r === 255 && g === 0 && b === 255) { hitColor = 'fuel'; }
+        else { hitColor = 'terrain'; }
+      }
+    }
+
+    if (hitColor === 'none') continue;
+    bullet.active = false;
+
+    if (hitColor === 'turret') {
+      // Find nearest non-destroyed turret
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < turrets.length; i++) {
+        if (destroyedTurrets.has(i)) continue;
+        const dx = bullet.x - turrets[i].x;
+        const dy = bullet.y - turrets[i].y;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+      }
+      if (bestIdx >= 0) result.hitTurrets.push(bestIdx);
+    } else if (hitColor === 'fuel') {
+      // Find nearest non-destroyed fuel
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < fuel.length; i++) {
+        if (destroyedFuel.has(i)) continue;
+        const dx = bullet.x - fuel[i].x;
+        const dy = bullet.y - fuel[i].y;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+      }
+      if (bestIdx >= 0) result.hitFuel.push(bestIdx);
+    }
+  }
+
+  return result;
 }
 
 export function testBulletShipCollision(

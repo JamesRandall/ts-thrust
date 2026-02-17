@@ -7,7 +7,8 @@ import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
 import {createGame, tick, resetGame} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, CollisionResult} from "./collision";
-import {renderBullets, testBulletShipCollision, removeCollidingBullets} from "./bullets";
+import {renderBullets, testBulletShipCollision, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
+import {renderExplosions, spawnExplosion} from "./explosions";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -69,11 +70,30 @@ async function startGame() {
     // Camera from scroll state
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
 
-    // Remove bullets that hit terrain
+    // Remove bullets that hit terrain/objects
     removeCollidingBullets(game.turretFiring, collisionImageData, camX, camY);
+
+    // Player bullet collision via collision buffer — detects terrain hits and object destruction
+    const bulletHits = processPlayerBulletCollisions(
+      game.playerShooting, collisionImageData, camX, camY,
+      game.level.turrets, game.level.fuel,
+      game.destroyedTurrets, game.destroyedFuel,
+    );
+    for (const idx of bulletHits.hitTurrets) {
+      game.destroyedTurrets.add(idx);
+      const t = game.level.turrets[idx];
+      spawnExplosion(game.explosions, t.x + 2, t.y + 4);
+      game.score += 750;
+    }
+    for (const idx of bulletHits.hitFuel) {
+      game.destroyedFuel.add(idx);
+      const f = game.level.fuel[idx];
+      spawnExplosion(game.explosions, f.x + 2, f.y + 4);
+      game.score += 150;
+    }
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const center = shipCenters[spriteIdx];
@@ -95,9 +115,11 @@ async function startGame() {
     // Render visible frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel);
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
+    renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
+    renderExplosions(ctx, game.explosions, camX, camY, game.level.terrainColor);
 
     drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
 

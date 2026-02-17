@@ -194,6 +194,8 @@ export function renderLevel(
   powerPlantSprite?: ImageBitmap,
   podStandSprite?: ImageBitmap,
   shieldSprite?: ImageBitmap,
+  destroyedTurrets?: Set<number>,
+  destroyedFuel?: Set<number>,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -242,7 +244,9 @@ export function renderLevel(
   } else {
     drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
   }
-  for (const f of level.fuel) {
+  for (let i = 0; i < level.fuel.length; i++) {
+    if (destroyedFuel?.has(i)) continue;
+    const f = level.fuel[i];
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
       const sy = Math.round(wy(f.y) - camY);
@@ -251,7 +255,9 @@ export function renderLevel(
       drawMarker(f.x, f.y, bbcMicroColours.magenta);
     }
   }
-  for (const t of level.turrets) {
+  for (let i = 0; i < level.turrets.length; i++) {
+    if (destroyedTurrets?.has(i)) continue;
+    const t = level.turrets[i];
     if (turretSprites) {
       const sprite = getTurretSprite(t.direction, turretSprites);
       const sx = Math.round(toScreenX(t.x));
