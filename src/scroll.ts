@@ -63,39 +63,22 @@ export function updateScroll(
   state: ScrollState,
   config: ScrollConfig,
 ): void {
-  // --- Y axis ---
+  // --- Y axis (proportional to overshoot, same approach as X) ---
   const midpointViewY = midpointWorld.y - state.windowPos.y - config.statusBarOffset;
 
-  if (forceVector.y >= 0) {
-    // Moving down or stationary
-    if (midpointViewY >= config.yScrollDownTrigger) {
-      // Outside dead zone — engage scrolling at force speed
-      state.scrollSpeed.y = forceVector.y + 1;
-    } else if (state.scrollSpeed.y > 0) {
-      // Inside dead zone but still scrolling down — decelerate
-      if (forceVector.y + 1 < state.scrollSpeed.y) {
-        state.scrollSpeed.y--;
-        if (state.scrollSpeed.y === 0) state.scrollSpeed.y = 1; // avoid sign flip
-      }
-    }
+  if (midpointViewY < config.yScrollUpTrigger) {
+    // Outside dead zone above — scroll speed proportional to overshoot
+    state.scrollSpeed.y = midpointViewY - config.yScrollUpTrigger;
+  } else if (midpointViewY > config.yScrollDownTrigger) {
+    // Outside dead zone below
+    state.scrollSpeed.y = midpointViewY - config.yScrollDownTrigger;
   } else {
-    // Moving up
-    if (midpointViewY < config.yScrollUpTrigger) {
-      state.scrollSpeed.y = forceVector.y - 1;
+    // Inside dead zone — decelerate toward zero
+    if (state.scrollSpeed.y > 0) {
+      state.scrollSpeed.y = Math.max(0, state.scrollSpeed.y - 1);
     } else if (state.scrollSpeed.y < 0) {
-      if (state.scrollSpeed.y < forceVector.y) {
-        state.scrollSpeed.y++;
-        if (state.scrollSpeed.y === 0) state.scrollSpeed.y = -1;
-      }
+      state.scrollSpeed.y = Math.min(0, state.scrollSpeed.y + 1);
     }
-  }
-
-  // Brake zone hard stop for Y
-  if (state.scrollSpeed.y > 0 && midpointViewY < config.yBrakeUpStop) {
-    state.scrollSpeed.y = 0;
-  }
-  if (state.scrollSpeed.y < 0 && midpointViewY > config.yBrakeDownStop) {
-    state.scrollSpeed.y = 0;
   }
 
   // --- X axis ---
