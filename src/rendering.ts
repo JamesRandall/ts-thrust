@@ -93,7 +93,7 @@ export function rotationToSpriteIndex(radians: number): number {
 }
 
 const tintCanvas = document.createElement('canvas');
-const tintCtx = tintCanvas.getContext('2d')!;
+const tintCtx = tintCanvas.getContext('2d', { willReadFrequently: true })!;
 
 function parseHexColor(hex: string): [number, number, number] {
   const v = parseInt(hex.slice(1), 16);
@@ -131,7 +131,7 @@ function drawWhiteReplacedSprite(
  *   Red   (255,0,0)     → colour1 (always yellow)
  *   Other non-black      → colour2 (landscape colour, per level)
  */
-function drawRemappedSprite(
+export function drawRemappedSprite(
   ctx: CanvasRenderingContext2D,
   sprite: ImageBitmap,
   x: number,
@@ -198,6 +198,7 @@ export function renderLevel(
   destroyedFuel?: Set<number>,
   generatorDestroyed?: boolean,
   generatorVisible?: boolean,
+  podDetached?: boolean,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -241,12 +242,14 @@ export function renderLevel(
       drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
     }
   }
-  if (podStandSprite) {
-    const sx = Math.round(toScreenX(level.podPedestal.x));
-    const sy = Math.round(wy(level.podPedestal.y) - camY);
-    drawRemappedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor, level.terrainColor);
-  } else {
-    drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  if (!podDetached) {
+    if (podStandSprite) {
+      const sx = Math.round(toScreenX(level.podPedestal.x));
+      const sy = Math.round(wy(level.podPedestal.y) - camY);
+      drawRemappedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor, level.terrainColor);
+    } else {
+      drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+    }
   }
   for (let i = 0; i < level.fuel.length; i++) {
     if (destroyedFuel?.has(i)) continue;

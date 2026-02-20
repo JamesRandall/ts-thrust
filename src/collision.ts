@@ -26,7 +26,7 @@ export function createCollisionBuffer(width: number, height: number): CollisionB
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   return { canvas, ctx, width, height };
 }
 
@@ -42,6 +42,7 @@ export function renderCollisionBuffer(
   destroyedTurrets?: Set<number>,
   destroyedFuel?: Set<number>,
   generatorDestroyed?: boolean,
+  podDetached?: boolean,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -86,13 +87,15 @@ export function renderCollisionBuffer(
       drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
     }
   }
-  if (podStandSprite) {
-    const sx = Math.round(toScreenX(level.podPedestal.x));
-    const sy = Math.round(wy(level.podPedestal.y) - camY);
-    ctx.fillStyle = bbcMicroColours.white;
-    ctx.fillRect(sx, sy - 1, podStandSprite.width, podStandSprite.height);
-  } else {
-    drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+  if (!podDetached) {
+    if (podStandSprite) {
+      const sx = Math.round(toScreenX(level.podPedestal.x));
+      const sy = Math.round(wy(level.podPedestal.y) - camY);
+      ctx.fillStyle = bbcMicroColours.white;
+      ctx.fillRect(sx, sy - 1, podStandSprite.width, podStandSprite.height);
+    } else {
+      drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
+    }
   }
   for (let i = 0; i < level.fuel.length; i++) {
     if (destroyedFuel?.has(i)) continue;
@@ -123,6 +126,51 @@ export function renderCollisionBuffer(
       drawMarker(t.x, t.y, bbcMicroColours.red);
     }
   }
+}
+
+/** Test a single screen pixel against the collision buffer image data. */
+function testPixelCollision(data: Uint8ClampedArray, width: number, height: number, px: number, py: number): boolean {
+  if (px < 0 || px >= width || py < 0 || py >= height) return false;
+  const idx = (py * width + px) * 4;
+  return data[idx] + data[idx + 1] + data[idx + 2] > 0;
+}
+
+/** Test a Bresenham line for collision. Returns true if any pixel hits terrain/objects. */
+export function testLineCollision(
+  imageData: ImageData,
+  x0: number, y0: number,
+  x1: number, y1: number,
+): boolean {
+  const { data, width, height } = imageData;
+  let cx = x0, cy = y0;
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  while (true) {
+    if (testPixelCollision(data, width, height, cx, cy)) return true;
+    if (cx === x1 && cy === y1) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; cx += sx; }
+    if (e2 < dx) { err += dx; cy += sy; }
+  }
+  return false;
+}
+
+/** Test a rectangular area for collision. Returns true if any pixel hits terrain/objects. */
+export function testRectCollision(
+  imageData: ImageData,
+  sx: number, sy: number,
+  w: number, h: number,
+): boolean {
+  const { data, width, height } = imageData;
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      if (testPixelCollision(data, width, height, sx + dx, sy + dy)) return true;
+    }
+  }
+  return false;
 }
 
 export function testCollision(
