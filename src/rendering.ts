@@ -199,6 +199,7 @@ export function renderLevel(
   generatorDestroyed?: boolean,
   generatorVisible?: boolean,
   podDetached?: boolean,
+  hideShip?: boolean,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -284,13 +285,15 @@ export function renderLevel(
   const shipDrawX = Math.round(screenX - center.x);
   const shipDrawY = Math.round(screenY - center.y);
 
-  ctx.drawImage(sprite, shipDrawX, shipDrawY);
+  if (!hideShip) {
+    ctx.drawImage(sprite, shipDrawX, shipDrawY);
 
-  if (shieldSprite) {
-    // Shield is centered on the canvas (same size as ship sprites)
-    const shieldDrawX = Math.round(screenX - shieldSprite.width / 2);
-    const shieldDrawY = Math.round(screenY - shieldSprite.height / 2);
-    drawWhiteReplacedSprite(ctx, shieldSprite, shieldDrawX, shieldDrawY, bbcMicroColours.green);
+    if (shieldSprite) {
+      // Shield is centered on the canvas (same size as ship sprites)
+      const shieldDrawX = Math.round(screenX - shieldSprite.width / 2);
+      const shieldDrawY = Math.round(screenY - shieldSprite.height / 2);
+      drawWhiteReplacedSprite(ctx, shieldSprite, shieldDrawX, shieldDrawY, bbcMicroColours.green);
+    }
   }
 }
 

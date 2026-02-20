@@ -30,6 +30,17 @@ const ORBIT_ESCAPE_Y = 288;
 // Duration of message overlay in game ticks (~2 seconds at 33 Hz)
 export const MESSAGE_DURATION = 66;
 
+export interface TeleportAnimation {
+  isDisappearing: boolean;  // true = orbit escape, false = level start/retry
+  step: number;             // 0-11 (current animation frame)
+  timer: number;            // seconds accumulated for frame pacing
+  shipCX: number;           // ship center screen X (frozen at anim start)
+  shipCY: number;           // ship center screen Y (frozen at anim start)
+  podCX: number;            // pod center screen X (frozen)
+  podCY: number;            // pod center screen Y (frozen)
+  hasPod: boolean;          // pod was attached when animation started
+}
+
 export type PendingAction = 'retry' | 'next-level' | 'game-over' | null;
 
 export interface GameState {
@@ -68,6 +79,7 @@ export interface GameState {
   messageText: string | null;
   messageTimer: number;
   pendingAction: PendingAction;
+  teleport: TeleportAnimation | null;
   gameOver: boolean;
 }
 
@@ -93,7 +105,7 @@ export function createGame(
   const starField = createStarFieldState();
   seedStarField(starField, scroll.windowPos.x, level.objectColor, level.terrainColor);
 
-  return {
+  const state: GameState = {
     level,
     physics,
     player: {
@@ -129,7 +141,37 @@ export function createGame(
     messageText: null,
     messageTimer: 0,
     pendingAction: null,
+    teleport: null,
     gameOver: false,
+  };
+  startTeleport(state, false);
+  return state;
+}
+
+/** Compute and freeze screen positions for the teleport animation. */
+export function startTeleport(state: GameState, isDisappearing: boolean): void {
+  const camX = Math.round(state.scroll.windowPos.x * WORLD_SCALE_X);
+  const camY = Math.round(state.scroll.windowPos.y * WORLD_SCALE_Y);
+
+  const shipCX = Math.round(state.player.x * WORLD_SCALE_X - camX);
+  const shipCY = Math.round(state.player.y * WORLD_SCALE_Y - camY);
+
+  let podCX = 0, podCY = 0;
+  const hasPod = state.physics.state.podAttached;
+  if (hasPod) {
+    podCX = Math.round(state.physics.state.podX * WORLD_SCALE_X - camX);
+    podCY = Math.round(state.physics.state.podY * WORLD_SCALE_Y - camY);
+  }
+
+  state.teleport = {
+    isDisappearing,
+    step: 0,
+    timer: 0,
+    shipCX,
+    shipCY,
+    podCX,
+    podCY,
+    hasPod,
   };
 }
 
@@ -352,6 +394,8 @@ export function retryLevel(state: GameState): void {
   state.messageText = null;
   state.messageTimer = 0;
   state.pendingAction = null;
+  state.teleport = null;
+  startTeleport(state, false);
 }
 
 /** Set message overlay and pending action. */

@@ -6,7 +6,7 @@ import podStandPng from "./sprites/pod_stand.png";
 import podPng from "./sprites/pod.png";
 import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
-import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, MESSAGE_DURATION} from "./game";
+import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, startTeleport, MESSAGE_DURATION} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCollision, testRectCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
@@ -48,6 +48,44 @@ let lastTime = -1;
 let fps = 0;
 let showFps = false;
 
+// Teleport animation constants
+const TELEPORT_FRAME_DURATION = 1 / 25;  // 40ms per step (half speed)
+const TELEPORT_VISIBILITY_THRESHOLD = 3;
+const TELEPORT_STRIP_HEIGHT = 8;
+const TELEPORT_STRIP_SPACING = 8;
+const TELEPORT_DIAGONAL_OFFSET = 4;
+
+function drawTeleportEffect(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  currentSize: number,
+  color: string,
+) {
+  // Origin is offset diagonally so the 8px strips are centered on the ship/pod
+  const ox = cx - TELEPORT_DIAGONAL_OFFSET;
+  const oy = cy - TELEPORT_DIAGONAL_OFFSET;
+  ctx.fillStyle = color;
+
+  // Draw ALL sizes from 1 to currentSize (accumulated cross pattern).
+  // The original uses XOR rendering which naturally accumulates; we redraw each frame
+  // so we explicitly draw all sizes. This creates the graduated thickness where
+  // strips cluster near center (wider blocks) and thin out toward the tips.
+  for (let s = 1; s <= currentSize; s++) {
+    for (let i = 0; i < s; i++) {
+      const offset = s + i * TELEPORT_STRIP_SPACING;
+      // Right arm: vertical strips extending right from central 8px zone
+      ctx.fillRect(ox + TELEPORT_STRIP_HEIGHT - 1 + offset, oy, 1, TELEPORT_STRIP_HEIGHT);
+      // Left arm: vertical strips extending left
+      ctx.fillRect(ox - offset, oy, 1, TELEPORT_STRIP_HEIGHT);
+      // Bottom arm: horizontal strips extending down from central 8px zone
+      ctx.fillRect(ox, oy + TELEPORT_STRIP_HEIGHT - 1 + offset, TELEPORT_STRIP_HEIGHT, 1);
+      // Top arm: horizontal strips extending up
+      ctx.fillRect(ox, oy - offset, TELEPORT_STRIP_HEIGHT, 1);
+    }
+  }
+}
+
 async function startGame() {
   const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite, podSprite] = await Promise.all([
     loadShipSprites(),
@@ -59,7 +97,7 @@ async function startGame() {
     loadSprite(podPng),
   ]);
 
-  function renderScene() {
+  function renderScene(hideShip?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
@@ -68,7 +106,7 @@ async function startGame() {
 
     renderStars(ctx, game.starField, camX, camY);
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, hideShip);
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
@@ -80,8 +118,8 @@ async function startGame() {
     const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - center.y);
     renderFuelBeams(ctx, game.fuelCollection, shipScreenX, shipScreenY);
 
-    // Tractor beam / attachment line + attached pod rendering
-    if (game.podLineExists || game.physics.state.podAttached) {
+    // Tractor beam / attachment line + attached pod rendering (skip during teleport)
+    if (!game.teleport && (game.podLineExists || game.physics.state.podAttached)) {
       const shipCX = Math.round(game.player.x * WORLD_SCALE_X - camX);
       const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
 
@@ -133,6 +171,23 @@ async function startGame() {
     drawText(ctx, text, cx, cy, bbcMicroColours.white);
   }
 
+  function processOrbitEscape() {
+    if (game.fuelEmpty) {
+      triggerMessage(game, "OUT OF FUEL", 'game-over');
+    } else if (game.physics.state.podAttached) {
+      missionComplete(game);
+      triggerMessage(game, "MISSION COMPLETE", 'next-level');
+    } else if (game.generator.planetCountdown >= 0) {
+      game.lives--;
+      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
+      else triggerMessage(game, "PLANET DESTROYED", 'next-level');
+    } else {
+      game.lives--;
+      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
+      else triggerMessage(game, "MISSION INCOMPLETE", 'retry');
+    }
+  }
+
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
@@ -174,6 +229,58 @@ async function startGame() {
         }
         game.pendingAction = null;
         game.messageText = null;
+      }
+
+      // FPS counter (toggle with F)
+      if (keys.has("KeyF")) {
+        showFps = !showFps;
+        keys.delete("KeyF");
+      }
+      if (showFps) {
+        if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
+        const fpsText = String(Math.round(fps));
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, INTERNAL_H - 7, fpsText.length * 8 + 2, 7);
+        drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
+      }
+
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    // Teleport animation
+    if (game.teleport) {
+      game.teleport.timer += dt;
+      while (game.teleport.timer >= TELEPORT_FRAME_DURATION) {
+        game.teleport.timer -= TELEPORT_FRAME_DURATION;
+        game.teleport.step++;
+      }
+
+      if (game.teleport.step >= 12) {
+        // Animation complete
+        const wasDisappearing = game.teleport.isDisappearing;
+        game.teleport = null;
+        if (wasDisappearing) {
+          processOrbitEscape();
+        }
+        renderScene();
+      } else {
+        // Calculate size: expand 1→6, contract 6→1
+        const step = game.teleport.step;
+        const size = step < 6 ? step + 1 : 12 - step;
+        const isExpansion = step < 6;
+
+        // Ship visibility per spec table
+        const shipVisible = size >= TELEPORT_VISIBILITY_THRESHOLD ||
+          (game.teleport.isDisappearing ? isExpansion : !isExpansion);
+
+        renderScene(!shipVisible);
+
+        // Draw teleport rectangles
+        drawTeleportEffect(ctx, game.teleport.shipCX, game.teleport.shipCY, size, bbcMicroColours.yellow);
+        if (game.teleport.hasPod) {
+          drawTeleportEffect(ctx, game.teleport.podCX, game.teleport.podCY, size, bbcMicroColours.white);
+        }
       }
 
       // FPS counter (toggle with F)
@@ -288,23 +395,10 @@ async function startGame() {
       game.levelEndedFlag = true;
     }
 
-    // --- Process orbit escape ---
+    // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
-      if (game.fuelEmpty) {
-        triggerMessage(game, "OUT OF FUEL", 'game-over');
-      } else if (game.physics.state.podAttached) {
-        missionComplete(game);
-        triggerMessage(game, "MISSION COMPLETE", 'next-level');
-      } else if (game.generator.planetCountdown >= 0) {
-        game.lives--;
-        if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-        else triggerMessage(game, "PLANET DESTROYED", 'next-level');
-      } else {
-        game.lives--;
-        if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-        else triggerMessage(game, "MISSION INCOMPLETE", 'retry');
-      }
+      startTeleport(game, true);
     }
 
     // --- Process death (levelEndedFlag) ---
