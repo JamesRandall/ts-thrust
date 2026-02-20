@@ -211,8 +211,10 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
   // Update scroll at 50 Hz fixed timestep
   const scrollDt = Math.min(dt, 0.1);
   state.scrollAccumulator += scrollDt;
+  let scrollUpdated = false;
   while (state.scrollAccumulator >= SCROLL_STEP_S) {
     state.scrollAccumulator -= SCROLL_STEP_S;
+    scrollUpdated = true;
 
     // Fuel burn logic per game tick
     const slot = state.fuelTickCounter & 0x0F;
@@ -340,6 +342,18 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     if (state.physics.state.y < ORBIT_ESCAPE_Y && !state.levelEndedFlag) {
       state.escapedToOrbit = true;
     }
+  }
+
+  // Ensure scroll updates at least once per frame to stay in sync with physics.
+  // Without this, frames where the 50Hz accumulator doesn't trigger leave the
+  // camera stale while ship/pod positions have advanced, causing visible jitter.
+  if (!scrollUpdated) {
+    updateScroll(
+        { x: state.player.x, y: state.player.y },
+        { x: state.physics.state.forceX, y: state.physics.state.forceY },
+        state.scroll,
+        state.scrollConfig,
+    );
   }
 }
 
