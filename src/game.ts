@@ -1,4 +1,4 @@
-import { Level } from "./levels";
+import { Level, levels } from "./levels";
 import { ThrustPhysics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
@@ -23,6 +23,14 @@ const FUEL_ACTIVE_SLOTS = new Set([0, 3, 5, 8, 11, 13]);
 // Tractor beam distance thresholds (screen-space approximate distance)
 const TRACTOR_BEAM_START_DISTANCE = 0x75;  // 117 — close zone
 const TRACTOR_ATTACH_DISTANCE = 0x84;      // 132 — far zone
+
+// Orbit escape altitude — midpoint y < this = escaped (matches original $0120)
+const ORBIT_ESCAPE_Y = 288;
+
+// Duration of message overlay in game ticks (~2 seconds at 33 Hz)
+export const MESSAGE_DURATION = 66;
+
+export type PendingAction = 'retry' | 'next-level' | 'game-over' | null;
 
 export interface GameState {
   level: Level;
@@ -53,9 +61,21 @@ export interface GameState {
   podLineExists: boolean;
   fuelTickCounter: number;
   fuelEmpty: boolean;
+  levelNumber: number;
+  missionNumber: number;
+  levelEndedFlag: boolean;
+  escapedToOrbit: boolean;
+  messageText: string | null;
+  messageTimer: number;
+  pendingAction: PendingAction;
+  gameOver: boolean;
 }
 
-export function createGame(level: Level): GameState {
+export function createGame(
+  level: Level,
+  levelNumber: number = 0,
+  persistent?: { lives: number; score: number; missionNumber: number },
+): GameState {
   const physics = new ThrustPhysics({
     x: level.startingPosition.x,
     y: level.startingPosition.y,
@@ -82,8 +102,8 @@ export function createGame(level: Level): GameState {
       rotation: 0,
     },
     fuel: 1000,
-    lives: 3,
-    score: 0,
+    lives: persistent?.lives ?? 3,
+    score: persistent?.score ?? 0,
     collisionResult: CollisionResult.None,
     shieldActive: false,
     scroll,
@@ -102,6 +122,14 @@ export function createGame(level: Level): GameState {
     podLineExists: false,
     fuelTickCounter: 0,
     fuelEmpty: false,
+    levelNumber,
+    missionNumber: persistent?.missionNumber ?? 0,
+    levelEndedFlag: false,
+    escapedToOrbit: false,
+    messageText: null,
+    messageTimer: 0,
+    pendingAction: null,
+    gameOver: false,
   };
 }
 
@@ -265,10 +293,16 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
         state.podLineExists = state.tractorBeamStarted && state.shieldActive;
       }
     }
+
+    // Orbit escape detection
+    if (state.physics.state.y < ORBIT_ESCAPE_Y && !state.levelEndedFlag) {
+      state.escapedToOrbit = true;
+    }
   }
 }
 
-export function resetGame(state: GameState): void {
+/** Reset level state for retry — preserves score, lives, levelNumber, missionNumber. */
+export function retryLevel(state: GameState): void {
   // Detach pod first if attached
   state.physics.detachPod();
 
@@ -313,4 +347,43 @@ export function resetGame(state: GameState): void {
   state.planetKilled = false;
   state.tractorBeamStarted = false;
   state.podLineExists = false;
+  state.levelEndedFlag = false;
+  state.escapedToOrbit = false;
+  state.messageText = null;
+  state.messageTimer = 0;
+  state.pendingAction = null;
+}
+
+/** Set message overlay and pending action. */
+export function triggerMessage(
+  state: GameState,
+  text: string,
+  action: PendingAction,
+  duration: number = MESSAGE_DURATION,
+): void {
+  state.messageText = text;
+  state.messageTimer = duration;
+  state.pendingAction = action;
+}
+
+/** Advance to next level, preserving persistent state. */
+export function advanceToNextLevel(state: GameState): GameState {
+  const nextLevelNumber = (state.levelNumber + 1) % levels.length;
+  return createGame(levels[nextLevelNumber], nextLevelNumber, {
+    lives: state.lives,
+    score: state.score,
+    missionNumber: state.missionNumber,
+  });
+}
+
+/** Apply mission complete bonus scoring and extra lives. */
+export function missionComplete(state: GameState): void {
+  state.missionNumber++;
+  let loopCount = state.levelNumber + 5;
+  if (state.generator.planetCountdown >= 0) loopCount += 5;
+  const bonus = loopCount * 400;
+  const oldThousands = Math.floor(state.score / 1000);
+  state.score += bonus;
+  const newThousands = Math.floor(state.score / 1000);
+  state.lives += (newThousands - oldThousands);
 }

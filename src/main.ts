@@ -6,7 +6,7 @@ import podStandPng from "./sprites/pod_stand.png";
 import podPng from "./sprites/pod.png";
 import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
-import {createGame, tick, resetGame} from "./game";
+import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, MESSAGE_DURATION} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCollision, testRectCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
@@ -59,28 +59,150 @@ async function startGame() {
     loadSprite(podPng),
   ]);
 
+  function renderScene() {
+    const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
+    const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
+    const podDetached = game.physics.state.podAttached;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    renderStars(ctx, game.starField, camX, camY);
+
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached);
+
+    renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
+    renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
+    renderExplosions(ctx, game.explosions, camX, camY);
+
+    const spriteIdx = rotationToSpriteIndex(game.player.rotation);
+    const center = shipCenters[spriteIdx];
+    const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX - center.x);
+    const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - center.y);
+    renderFuelBeams(ctx, game.fuelCollection, shipScreenX, shipScreenY);
+
+    // Tractor beam / attachment line + attached pod rendering
+    if (game.podLineExists || game.physics.state.podAttached) {
+      const shipCX = Math.round(game.player.x * WORLD_SCALE_X - camX);
+      const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
+
+      let podCX: number, podCY: number;
+      if (game.physics.state.podAttached) {
+        podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
+        podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+      } else {
+        podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
+        podCY = Math.round(game.level.podPedestal.y * WORLD_SCALE_Y - camY - 1 + Math.floor(podSprite.height / 2));
+      }
+
+      ctx.fillStyle = game.level.terrainColor;
+      {
+        let x0 = shipCX, y0 = shipCY, x1 = podCX, y1 = podCY;
+        const dx = Math.abs(x1 - x0);
+        const dy = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1;
+        const sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+        while (true) {
+          ctx.fillRect(x0, y0, 1, 1);
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 > -dy) { err -= dy; x0 += sx; }
+          if (e2 < dx) { err += dx; y0 += sy; }
+        }
+      }
+
+      if (game.physics.state.podAttached) {
+        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, game.level.terrainColor);
+      }
+    }
+
+    drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
+
+    // Planet self-destruct countdown display
+    if (game.generator.planetCountdown >= 0) {
+      const countdownStr = String(game.generator.planetCountdown);
+      const cx = Math.floor((INTERNAL_W - countdownStr.length * 8) / 2);
+      const cy = Math.floor(INTERNAL_H / 2);
+      drawText(ctx, countdownStr, cx, cy, bbcMicroColours.white);
+    }
+  }
+
+  function drawCenteredMessage(text: string) {
+    const cx = Math.floor((INTERNAL_W - text.length * 8) / 2);
+    const cy = 128;
+    drawText(ctx, text, cx, cy, bbcMicroColours.white);
+  }
+
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
 
-    // Number keys switch level
+    // Game over state — wait for any key to restart
+    if (game.gameOver) {
+      renderScene();
+      drawCenteredMessage("GAME OVER");
+
+      // Check for any key to restart
+      if (keys.size > 0) {
+        keys.clear();
+        game = createGame(levels[0], 0);
+      }
+
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    // Message overlay — freeze scene and show text
+    if (game.messageTimer > 0) {
+      game.messageTimer--;
+      renderScene();
+      if (game.messageText) {
+        drawCenteredMessage(game.messageText);
+      }
+
+      if (game.messageTimer === 0 && game.pendingAction) {
+        switch (game.pendingAction) {
+          case 'retry':
+            retryLevel(game);
+            break;
+          case 'next-level':
+            game = advanceToNextLevel(game);
+            break;
+          case 'game-over':
+            game.gameOver = true;
+            break;
+        }
+        game.pendingAction = null;
+        game.messageText = null;
+      }
+
+      // FPS counter (toggle with F)
+      if (keys.has("KeyF")) {
+        showFps = !showFps;
+        keys.delete("KeyF");
+      }
+      if (showFps) {
+        if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
+        const fpsText = String(Math.round(fps));
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, INTERNAL_H - 7, fpsText.length * 8 + 2, 7);
+        drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
+      }
+
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    // Number keys switch level (debug)
     for (let i = 0; i < levels.length; i++) {
       if (keys.has(`Digit${i + 1}`)) {
-        game = createGame(levels[i]);
+        game = createGame(levels[i], i);
         keys.delete(`Digit${i + 1}`);
         break;
       }
     }
 
     tick(game, dt, keys);
-
-    // Planet self-destruct countdown reached 0
-    if (game.planetKilled) {
-      resetGame(game);
-      game.planetKilled = false;
-      requestAnimationFrame(frame);
-      return;
-    }
 
     // Camera from scroll state
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
@@ -128,8 +250,9 @@ async function startGame() {
     const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
     game.collisionResult = collision;
 
+    // --- Collision death detection (set levelEndedFlag instead of immediate reset) ---
     if (collision !== CollisionResult.None) {
-      resetGame(game);
+      game.levelEndedFlag = true;
     }
 
     // Tether line + pod collision with terrain (only when pod is attached, not during tractor beam)
@@ -141,14 +264,14 @@ async function startGame() {
 
       // Test tether line
       if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
-        resetGame(game);
+        game.levelEndedFlag = true;
       }
       // Test pod sprite area
       else {
         const podLeft = podCX - Math.floor(podSprite.width / 2);
         const podTop = podCY - Math.floor(podSprite.height / 2);
         if (testRectCollision(collisionImageData, podLeft, podTop, podSprite.width, podSprite.height)) {
-          resetGame(game);
+          game.levelEndedFlag = true;
         }
       }
     }
@@ -156,70 +279,53 @@ async function startGame() {
     // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
     const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
     if (bulletHitShip && !game.shieldActive) {
-      resetGame(game);
+      game.levelEndedFlag = true;
+    }
+
+    // Planet self-destruct countdown reached 0
+    if (game.planetKilled) {
+      game.planetKilled = false;
+      game.levelEndedFlag = true;
+    }
+
+    // --- Process orbit escape ---
+    if (game.escapedToOrbit) {
+      game.escapedToOrbit = false;
+      if (game.fuelEmpty) {
+        triggerMessage(game, "OUT OF FUEL", 'game-over');
+      } else if (game.physics.state.podAttached) {
+        missionComplete(game);
+        triggerMessage(game, "MISSION COMPLETE", 'next-level');
+      } else if (game.generator.planetCountdown >= 0) {
+        game.lives--;
+        if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
+        else triggerMessage(game, "PLANET DESTROYED", 'next-level');
+      } else {
+        game.lives--;
+        if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
+        else triggerMessage(game, "MISSION INCOMPLETE", 'retry');
+      }
+    }
+
+    // --- Process death (levelEndedFlag) ---
+    if (game.levelEndedFlag) {
+      game.levelEndedFlag = false;
+      if (game.fuelEmpty) {
+        triggerMessage(game, "OUT OF FUEL", 'game-over');
+      } else {
+        game.lives--;
+        if (game.lives <= 0) {
+          triggerMessage(game, "GAME OVER", 'game-over');
+        } else if (game.generator.planetCountdown >= 0 || game.planetKilled) {
+          triggerMessage(game, "PLANET DESTROYED", 'next-level');
+        } else {
+          retryLevel(game);
+        }
+      }
     }
 
     // Render visible frame
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    renderStars(ctx, game.starField, camX, camY);
-
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached);
-
-    renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
-    renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
-    renderExplosions(ctx, game.explosions, camX, camY);
-    renderFuelBeams(ctx, game.fuelCollection, shipScreenX, shipScreenY);
-
-    // Tractor beam / attachment line + attached pod rendering
-    if (game.podLineExists || game.physics.state.podAttached) {
-      const shipCX = Math.round(game.player.x * WORLD_SCALE_X - camX);
-      const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
-
-      let podCX: number, podCY: number;
-      if (game.physics.state.podAttached) {
-        podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
-        podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
-      } else {
-        // Tractor beam to pod circle center on stand
-        // Stand drawn at (pedestal.x, pedestal.y - 1px), pod circle center at (5, 5) within sprite
-        podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
-        podCY = Math.round(game.level.podPedestal.y * WORLD_SCALE_Y - camY - 1 + Math.floor(podSprite.height / 2));
-      }
-
-      // Draw line between ship and pod — Bresenham with coarse 2×2 pixel blocks
-      ctx.fillStyle = game.level.terrainColor;
-      {
-        let x0 = shipCX, y0 = shipCY, x1 = podCX, y1 = podCY;
-        const dx = Math.abs(x1 - x0);
-        const dy = Math.abs(y1 - y0);
-        const sx = x0 < x1 ? 1 : -1;
-        const sy = y0 < y1 ? 1 : -1;
-        let err = dx - dy;
-        while (true) {
-          ctx.fillRect(x0, y0, 1, 1);
-          if (x0 === x1 && y0 === y1) break;
-          const e2 = 2 * err;
-          if (e2 > -dy) { err -= dy; x0 += sx; }
-          if (e2 < dx) { err += dx; y0 += sy; }
-        }
-      }
-
-      // Draw attached pod sprite
-      if (game.physics.state.podAttached) {
-        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, game.level.terrainColor);
-      }
-    }
-
-    drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-
-    // Planet self-destruct countdown display
-    if (game.generator.planetCountdown >= 0) {
-      const countdownStr = String(game.generator.planetCountdown);
-      const cx = Math.floor((INTERNAL_W - countdownStr.length * 8) / 2);
-      const cy = Math.floor(INTERNAL_H / 2);
-      drawText(ctx, countdownStr, cx, cy, bbcMicroColours.white);
-    }
+    renderScene();
 
     // FPS counter (toggle with F)
     if (keys.has("KeyF")) {
