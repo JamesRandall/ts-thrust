@@ -19,17 +19,21 @@ const w = bbcMicroColours.white;
 
 const titlePages: TitleEntry[][] = [
   [
-    { row: 5, text: "THRUST", color: bbcMicroColours.green },
-    { row: 8, text: "Rotate left: {A}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 9, text: "Rotate right: {D}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 10, text: "Thrust: {W}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 11, text: "Fire: {RETURN}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 12, text: "Shield / Tractor beam: {SPACE}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 13, text: "Cycle effects: [ ]", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 4, text: "THRUST", color: bbcMicroColours.green },
+    { row: 6, text: "Rotate left: {A}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 7, text: "Rotate right: {D}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 8, text: "Thrust: {W}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 9, text: "Fire: {RETURN}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 10, text: "Shield / Tractor beam: {SPACE}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 11, text: "Cycle effects: {[ ]}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
 
-    { row: 18, text: "Destroy the reactor to start", color: w },
-    { row: 19, text: "the planet countdown", color: w },
-    { row: 22, text: "PRESS ANY KEY TO START", color: w },
+    { row: 13, text: "Original game copyright", color: bbcMicroColours.magenta },
+    { row: 14, text: "Jeremy C Smith 1986", color: bbcMicroColours.magenta },
+    { row: 16, text: "Recreated in Typescript by", color: bbcMicroColours.magenta },
+    { row: 17, text: "James Randall in 2026", color: bbcMicroColours.magenta },
+    { row: 18, text: "https://jamesdrandall.com/", color: bbcMicroColours.yellow },
+
+    { row: 21, text: "PRESS ANY KEY TO START", color: w },
   ],
   [
     { row: 6, text: "THRUST", color: w },
