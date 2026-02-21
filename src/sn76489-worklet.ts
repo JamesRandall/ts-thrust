@@ -22,8 +22,8 @@ const volumeTable = new Float32Array(16);
 }
 
 // MOS channel → SN76489 chip channel mapping
-// MOS ch0 = noise → chip ch3, MOS ch1-3 = tone → chip ch0-2
-const mosToChipChannel = [3, 0, 1, 2];
+// MOS ch0 = noise → chip ch3, MOS ch1 → chip ch2, ch2 → chip ch1, ch3 → chip ch0
+const mosToChipChannel = [3, 2, 1, 0];
 
 // ─── Pitch lookup tables (from BBC MOS 1.20) ───
 const pitchLookupTableLow = [
