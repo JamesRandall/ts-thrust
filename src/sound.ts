@@ -1,281 +1,109 @@
-// Thrust Sound Effects — Web Audio API implementation
-// Derived from BBC Micro SN76489 square wave synthesis
+// Thrust Sound System — authentic SN76489 via AudioWorklet
+// Sends OSWORD 7/8 commands to the worklet which runs the full
+// BBC MOS envelope processor + chip emulator.
 
-class EngineSound {
-  private ctx: AudioContext;
-  private noiseBuffer: AudioBuffer;
-  private source: AudioBufferSourceNode | null = null;
-  private gain: GainNode;
-  private filter: BiquadFilterNode;
+// Envelope definitions (OSWORD 8) — 14 bytes each, byte 0 = envelope number
+const envelopes: Record<number, number[]> = {
+  1: [0x01, 0x02, 0xfb, 0xfd, 0xfb, 0x02, 0x03, 0x32, 0x7e, 0xf9, 0xf9, 0xf4, 0x7e, 0x00],
+  2: [0x02, 0x02, 0xff, 0x00, 0x01, 0x09, 0x09, 0x09, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00],
+  3: [0x03, 0x04, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x7e, 0xfc, 0xfe, 0xfc, 0x7e, 0x6e],
+  4: [0x04, 0x01, 0xff, 0xff, 0xff, 0x12, 0x12, 0x12, 0x32, 0xf4, 0xf4, 0xf4, 0x6e, 0x46],
+};
 
-  constructor(ctx: AudioContext, destination: AudioNode) {
-    this.ctx = ctx;
-    const bufferSize = ctx.sampleRate;
-    this.noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = this.noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-    // Low-pass filter for deeper rumble (BBC Micro noise type 5 = medium freq)
-    this.filter = ctx.createBiquadFilter();
-    this.filter.type = 'lowpass';
-    this.filter.frequency.value = 800;
-    this.filter.Q.value = 0.7;
-    this.gain = ctx.createGain();
-    this.gain.gain.value = 0;
-    this.filter.connect(this.gain).connect(destination);
-  }
+// Sound parameter definitions (OSWORD 7)
+const sounds = {
+  own_gun:     { channel: 0x0012, amplitude: 1,   pitch: 0x50, duration: 2   },
+  explosion_1: { channel: 0x0011, amplitude: 2,   pitch: 0x96, duration: 100 },
+  explosion_2: { channel: 0x0010, amplitude: 3,   pitch: 0x07, duration: 100 },
+  hostile_gun: { channel: 0x0013, amplitude: 4,   pitch: 0x1e, duration: 20  },
+  collect_1:   { channel: 0x0002, amplitude: -15, pitch: 0xbe, duration: 1   },
+  collect_2:   { channel: 0x0002, amplitude: 0,   pitch: 0xbe, duration: 2   },
+  engine:      { channel: 0x0010, amplitude: -10, pitch: 0x05, duration: 3   },
+  countdown:   { channel: 0x0002, amplitude: -15, pitch: 0x96, duration: 1   },
+  enter_orbit: { channel: 0x0012, amplitude: 3,   pitch: 0xb9, duration: 1   },
+} as const;
 
-  start(): void {
-    if (this.source) return;
-    this.source = this.ctx.createBufferSource();
-    this.source.buffer = this.noiseBuffer;
-    this.source.loop = true;
-    this.source.connect(this.filter);
-    this.source.start();
-    this.gain.gain.setTargetAtTime(0.35, this.ctx.currentTime, 0.02);
-  }
-
-  stop(): void {
-    if (!this.source) return;
-    this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
-    const src = this.source;
-    this.source = null;
-    setTimeout(() => { try { src.stop(); } catch (_) {} }, 150);
-  }
-
-  get active(): boolean {
-    return this.source !== null;
-  }
-}
-
-class ShieldSound {
-  private ctx: AudioContext;
-  private osc: OscillatorNode | null = null;
-  private lfo: OscillatorNode | null = null;
-  private gain: GainNode | null = null;
-  private destination: AudioNode;
-
-  constructor(ctx: AudioContext, destination: AudioNode) {
-    this.ctx = ctx;
-    this.destination = destination;
-  }
-
-  start(): void {
-    if (this.osc) return;
-
-    this.osc = this.ctx.createOscillator();
-    this.osc.type = 'square';
-    this.osc.frequency.value = 120;
-
-    this.gain = this.ctx.createGain();
-    this.gain.gain.value = 0;
-
-    // 12.5Hz pulsing (vsync_count AND $02 toggle)
-    this.lfo = this.ctx.createOscillator();
-    this.lfo.type = 'square';
-    this.lfo.frequency.value = 12.5;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 0.15;
-    this.lfo.connect(lfoGain);
-    lfoGain.connect(this.gain.gain);
-
-    this.osc.connect(this.gain).connect(this.destination);
-    this.osc.start();
-    this.lfo.start();
-  }
-
-  stop(): void {
-    if (!this.osc) return;
-    try { this.osc.stop(); } catch (_) {}
-    try { this.lfo!.stop(); } catch (_) {}
-    this.osc = null;
-    this.lfo = null;
-    this.gain = null;
-  }
-
-  get active(): boolean {
-    return this.osc !== null;
-  }
-}
+type SoundName = keyof typeof sounds;
 
 export class ThrustSounds {
-  private ctx: AudioContext;
-  private masterGain: GainNode;
-  private engine: EngineSound;
-  private shield: ShieldSound;
-  private soundTimer: number = 0;
-  private noiseBuffer: AudioBuffer | null = null;
+  private ctx!: AudioContext;
+  private node!: AudioWorkletNode;
+  private soundTimer = 0;
 
-  constructor() {
-    this.ctx = new AudioContext();
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 1.0;
-    this.masterGain.connect(this.ctx.destination);
-    this.engine = new EngineSound(this.ctx, this.masterGain);
-    this.shield = new ShieldSound(this.ctx, this.masterGain);
+  private constructor() {}
+
+  static async create(): Promise<ThrustSounds> {
+    const ts = new ThrustSounds();
+    ts.ctx = new AudioContext();
+
+    const workletUrl = new URL('./sn76489-worklet.ts', import.meta.url);
+    await ts.ctx.audioWorklet.addModule(workletUrl);
+
+    ts.node = new AudioWorkletNode(ts.ctx, 'sn76489-processor');
+    ts.node.connect(ts.ctx.destination);
+
+    // Define all 4 envelopes
+    for (const [num, data] of Object.entries(envelopes)) {
+      ts.node.port.postMessage({ type: 'osword8', envNumber: Number(num), data });
+    }
+
+    return ts;
   }
 
   async resume(): Promise<void> {
     if (this.ctx.state === 'suspended') await this.ctx.resume();
   }
 
-  /** Call every game tick to decrement the explosion blocking timer. */
   tick(): void {
     if (this.soundTimer > 0) this.soundTimer--;
   }
 
-  private getNoiseBuffer(): AudioBuffer {
-    if (this.noiseBuffer) return this.noiseBuffer;
-    const size = this.ctx.sampleRate * 3;
-    this.noiseBuffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
-    const data = this.noiseBuffer.getChannelData(0);
-    for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-    return this.noiseBuffer;
+  private sendSound(name: SoundName, pitchOverride?: number): void {
+    const s = sounds[name];
+    this.node.port.postMessage({
+      type: 'osword7',
+      channel: s.channel,
+      amplitude: s.amplitude,
+      pitch: pitchOverride !== undefined ? pitchOverride : s.pitch,
+      duration: s.duration,
+    });
   }
 
-  /** Downward square wave sweep — classic 8-bit "pew" laser. */
   playOwnGun(): void {
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(165, t);
-    osc.frequency.exponentialRampToValueAtTime(52, t + 0.35);
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.linearRampToValueAtTime(0, t + 0.36);
-    osc.connect(gain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 0.4);
+    this.sendSound('own_gun');
   }
 
-  /** White noise burst with tonal body — destruction event. */
   playExplosion(): void {
-    this.soundTimer = 31;
-    const t = this.ctx.currentTime;
-
-    // Layer 1: Low-pass filtered noise burst for deeper explosion
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = this.getNoiseBuffer();
-    const nFilter = this.ctx.createBiquadFilter();
-    nFilter.type = 'lowpass';
-    nFilter.frequency.setValueAtTime(600, t);
-    nFilter.frequency.exponentialRampToValueAtTime(200, t + 1.0);
-    nFilter.Q.value = 0.8;
-    const nGain = this.ctx.createGain();
-    nGain.gain.setValueAtTime(0.6, t);
-    nGain.gain.linearRampToValueAtTime(0.4, t + 0.2);
-    nGain.gain.linearRampToValueAtTime(0, t + 2.4);
-    noise.connect(nFilter).connect(nGain).connect(this.masterGain);
-    noise.start(t);
-    noise.stop(t + 2.5);
-
-    // Layer 2: Tonal rumble body (lower frequency for deeper tone)
-    const osc = this.ctx.createOscillator();
-    const oGain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(120, t);
-    osc.frequency.linearRampToValueAtTime(80, t + 0.18);
-    osc.frequency.linearRampToValueAtTime(60, t + 0.54);
-    oGain.gain.setValueAtTime(0.08, t);
-    oGain.gain.linearRampToValueAtTime(0, t + 1.0);
-    osc.connect(oGain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 1.0);
+    this.soundTimer = 0x1f;
+    this.sendSound('explosion_1');
+    this.sendSound('explosion_2');
   }
 
-  /** Low square wave thud — turret shot. */
   playHostileGun(): void {
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(80, t);
-    osc.frequency.exponentialRampToValueAtTime(52, t + 0.13);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
-    gain.gain.linearRampToValueAtTime(0.22, t + 0.07);
-    gain.gain.linearRampToValueAtTime(0, t + 0.13);
-    osc.connect(gain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 0.15);
+    this.sendSound('hostile_gun');
   }
 
-  /** Double pip at 807Hz — fuel/pod pickup. */
   playCollect(): void {
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 807;
-    gain.gain.setValueAtTime(0.3, t);
-    gain.gain.setValueAtTime(0, t + 0.01);
-    gain.gain.setValueAtTime(0.3, t + 0.03);
-    gain.gain.setValueAtTime(0, t + 0.04);
-    osc.connect(gain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 0.05);
+    this.sendSound('collect_1');
+    this.sendSound('collect_2');
+    this.sendSound('collect_1');
   }
 
-  /** Sharp 453Hz beep — planet destruction countdown tick. */
   playCountdown(): void {
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 453;
-    gain.gain.setValueAtTime(0.35, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-    osc.connect(gain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 0.1);
+    this.sendSound('countdown');
   }
 
-  /** 751Hz square wave with long sustain decay — level complete. */
   playEnterOrbit(): void {
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 751;
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.linearRampToValueAtTime(0.35, t + 0.2);
-    gain.gain.linearRampToValueAtTime(0, t + 2.4);
-    osc.connect(gain).connect(this.masterGain);
-    osc.start(t);
-    osc.stop(t + 2.5);
+    this.sendSound('enter_orbit');
   }
 
-  /** Start continuous engine noise (blocked during explosion timer). */
-  startEngine(): void {
-    if (this.soundTimer === 0) this.engine.start();
+  runEngine(isShield: boolean): void {
+    if (this.soundTimer !== 0) return;
+    this.sendSound('engine', isShield ? 0x02 : 0x05);
   }
 
-  stopEngine(): void {
-    this.engine.stop();
-  }
-
-  get engineActive(): boolean {
-    return this.engine.active;
-  }
-
-  /** Start continuous shield/tractor hum. */
-  startShield(): void {
-    this.shield.start();
-  }
-
-  stopShield(): void {
-    this.shield.stop();
-  }
-
-  get shieldActive(): boolean {
-    return this.shield.active;
-  }
-
-  /** Stop all continuous sounds (for level transitions, death, etc). */
   stopAll(): void {
-    this.engine.stop();
-    this.shield.stop();
+    this.node.port.postMessage({ type: 'silenceAll' });
     this.soundTimer = 0;
   }
 }

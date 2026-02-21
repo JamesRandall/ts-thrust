@@ -70,7 +70,6 @@ let showFps = false;
 let paused = false;
 
 const postProcessor = new PostProcessor(canvas, ppCanvas, INTERNAL_W, INTERNAL_H);
-const sounds = new ThrustSounds();
 
 // Teleport animation constants
 const TELEPORT_FRAME_DURATION = 1 / 25;  // 40ms per step (half speed)
@@ -123,6 +122,8 @@ async function startGame() {
     loadSprite(shieldPng),
     loadSprite(podPng),
   ]);
+
+  const sounds = await ThrustSounds.create();
 
   function renderScene(hideShip?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
@@ -375,8 +376,6 @@ async function startGame() {
 
     // Teleport animation
     if (game.teleport) {
-      sounds.stopEngine();
-      sounds.stopShield();
       game.teleport.timer += dt;
       while (game.teleport.timer >= TELEPORT_FRAME_DURATION) {
         game.teleport.timer -= TELEPORT_FRAME_DURATION;
@@ -461,24 +460,11 @@ async function startGame() {
     const thrustActive = !dying && keys.has("KeyW") && !game.fuelEmpty;
     const shieldKeyDown = !dying && keys.has("Space") && !game.fuelEmpty;
 
-    // Engine: continuous noise while thrusting
+    // Engine/shield: re-issue every tick while active (duration=3 = 150ms, stops naturally)
     if (thrustActive && !shieldKeyDown) {
-      sounds.startEngine();
-    } else {
-      sounds.stopEngine();
-    }
-
-    // Shield/tractor: continuous hum while shield key held
-    if (shieldKeyDown) {
-      sounds.startShield();
-    } else {
-      sounds.stopShield();
-    }
-
-    // Stop continuous sounds on death
-    if (dying) {
-      sounds.stopEngine();
-      sounds.stopShield();
+      sounds.runEngine(false);
+    } else if (shieldKeyDown) {
+      sounds.runEngine(true);
     }
 
     // Player gun fired
@@ -600,8 +586,6 @@ async function startGame() {
     // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
-      sounds.stopEngine();
-      sounds.stopShield();
       sounds.playEnterOrbit();
       startTeleport(game, true);
     }
