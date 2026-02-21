@@ -33,7 +33,7 @@ const titlePages: TitleEntry[][] = [
     { row: 17, text: "{James Randall} in 2026", color: bbcMicroColours.magenta, color2: bbcMicroColours.yellow },
     { row: 18, text: "https://jamesdrandall.com/", color: bbcMicroColours.yellow },
 
-    { row: 21, text: "PRESS ANY KEY TO START", color: w },
+    { row: 21, text: "PRESS ANY KEY TO START", color: bbcMicroColours.red },
   ],
   [
     { row: 6, text: "THRUST", color: w },
