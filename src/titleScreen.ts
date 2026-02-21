@@ -1,9 +1,11 @@
 import {drawText, bbcMicroColours} from "./rendering";
+import {ScoreEntry, loadScores, renderScoreboard} from "./scoreboard";
 
 export interface TitleScreenState {
   active: boolean;
   pageTimer: number;
   page: number;
+  scores: ScoreEntry[];
 }
 
 const PAGE_FLIP_INTERVAL = 5;
@@ -14,8 +16,6 @@ interface TitleEntry {
   color: string;
   color2?: string;
 }
-
-const w = bbcMicroColours.white;
 
 const titlePages: TitleEntry[][] = [
   [
@@ -35,35 +35,32 @@ const titlePages: TitleEntry[][] = [
 
     { row: 21, text: "PRESS ANY KEY TO START", color: bbcMicroColours.red },
   ],
-  [
-    { row: 6, text: "THRUST", color: w },
-    { row: 10, text: "A game of skill and gravity", color: w },
-    { row: 14, text: "Collect the pod and escape", color: w },
-    { row: 15, text: "each planet to complete", color: w },
-    { row: 16, text: "your mission", color: w },
-    { row: 20, text: "PRESS ANY KEY TO START", color: w },
-  ]
 ];
 
 export function createTitleScreen(): TitleScreenState {
-  return { active: true, pageTimer: 0, page: 0 };
+  return { active: true, pageTimer: 0, page: 0, scores: loadScores() };
 }
 
 export function resetTitleScreen(state: TitleScreenState): void {
   state.active = true;
   state.pageTimer = 0;
   state.page = 0;
+  state.scores = loadScores();
 }
 
 export function updateTitleScreen(state: TitleScreenState, dt: number): void {
   state.pageTimer += dt;
   if (state.pageTimer >= PAGE_FLIP_INTERVAL) {
     state.pageTimer -= PAGE_FLIP_INTERVAL;
-    //state.page = state.page === 0 ? 1 : 0;
+    state.page = (state.page + 1) % 2;
   }
 }
 
 export function renderTitleScreen(ctx: CanvasRenderingContext2D, state: TitleScreenState, screenWidth: number): void {
+  if (state.page === 1) {
+    renderScoreboard(ctx, screenWidth, state.scores);
+    return;
+  }
   const page = titlePages[state.page];
   for (const entry of page) {
     const y = entry.row * 8;

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thrust Sound Effects — Web Audio Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    color: #ffff00;
+    font-size: 18px;
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .subtitle {
+    color: #666;
+    font-size: 12px;
+    margin-bottom: 24px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    max-width: 900px;
+  }
+  .card {
+    border: 1px solid #333;
+    padding: 16px;
+    background: #111;
+  }
+  .card h2 {
+    font-size: 13px;
+    color: #ffff00;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .card .desc {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  button {
+    background: #222;
+    color: #ffff00;
+    border: 1px solid #ffff00;
+    padding: 8px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.1s;
+  }
+  button:hover { background: #333; }
+  button:active { background: #ffff00; color: #000; }
+  button.held { background: #444; border-color: #ff0; }
+  .note {
+    margin-top: 24px;
+    font-size: 11px;
+    color: #555;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<h1>THRUST — SOUND EFFECTS</h1>
+<p class="subtitle">Web Audio recreation from BBC Micro SN76489 analysis</p>
+
+<div class="grid">
+  <div class="card">
+    <h2>Player Gun</h2>
+    <p class="desc">Downward square wave sweep. 165Hz → 52Hz over 350ms. Classic "pew".</p>
+    <button onclick="playOwnGun()">FIRE</button>
+  </div>
+
+  <div class="card">
+    <h2>Hostile Gun</h2>
+    <p class="desc">Low square wave thud. 80Hz → 52Hz, fast decay. Turret shot.</p>
+    <button onclick="playHostileGun()">FIRE</button>
+  </div>
+
+  <div class="card">
+    <h2>Explosion</h2>
+    <p class="desc">White noise burst with slow 2.4s fade, subtle square wave body at 453Hz.</p>
+    <button onclick="playExplosion()">EXPLODE</button>
+  </div>
+
+  <div class="card">
+    <h2>Collect</h2>
+    <p class="desc">Double pip at 807Hz. Pip-silence-pip pattern. Fuel/pod pickup.</p>
+    <button onclick="playCollect()">COLLECT</button>
+  </div>
+
+  <div class="card">
+    <h2>Countdown</h2>
+    <p class="desc">Sharp 453Hz beep. Planet destruction timer.</p>
+    <button onclick="playCountdown()">BEEP</button>
+  </div>
+
+  <div class="card">
+    <h2>Enter Orbit</h2>
+    <p class="desc">751Hz square wave with long 2.4s sustain decay. Level complete.</p>
+    <button onclick="playEnterOrbit()">ORBIT</button>
+  </div>
+
+  <div class="card">
+    <h2>Engine Thrust</h2>
+    <p class="desc">Continuous white noise while held. Hold the button or press E.</p>
+    <button id="engineBtn"
+      onmousedown="startEngine()" onmouseup="stopEngine()" onmouseleave="stopEngine()"
+      ontouchstart="startEngine()" ontouchend="stopEngine()">
+      HOLD TO THRUST
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>Shield / Tractor</h2>
+    <p class="desc">Low square wave hum at 40Hz, pulsed at 12.5Hz. Hold or press S.</p>
+    <button id="shieldBtn"
+      onmousedown="startShield()" onmouseup="stopShield()" onmouseleave="stopShield()"
+      ontouchstart="startShield()" ontouchend="stopShield()">
+      HOLD FOR SHIELD
+    </button>
+  </div>
+</div>
+
+<p class="note">
+  Keys: 1=gun, 2=hostile, 3=explosion, 4=collect, 5=countdown, 6=orbit, E=engine (hold), S=shield (hold)
+</p>
+
+<script>
+let ctx = null;
+function getCtx() {
+  if (!ctx) ctx = new AudioContext();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+
+// Shared noise buffer
+let noiseBuffer = null;
+function getNoiseBuffer() {
+  const c = getCtx();
+  if (noiseBuffer) return noiseBuffer;
+  const size = c.sampleRate * 3;
+  noiseBuffer = c.createBuffer(1, size, c.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+  return noiseBuffer;
+}
+
+// ── Player Gun ──
+function playOwnGun() {
+  const c = getCtx();
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(165, t);
+  osc.frequency.exponentialRampToValueAtTime(52, t + 0.35);
+  gain.gain.setValueAtTime(0.4, t);
+  gain.gain.linearRampToValueAtTime(0, t + 0.36);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.4);
+}
+
+// ── Hostile Gun ──
+function playHostileGun() {
+  const c = getCtx();
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(80, t);
+  osc.frequency.exponentialRampToValueAtTime(52, t + 0.13);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
+  gain.gain.linearRampToValueAtTime(0.22, t + 0.07);
+  gain.gain.linearRampToValueAtTime(0, t + 0.13);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.15);
+}
+
+// ── Explosion ──
+function playExplosion() {
+  const c = getCtx();
+  const t = c.currentTime;
+
+  // Noise burst
+  const noise = c.createBufferSource();
+  noise.buffer = getNoiseBuffer();
+  const nGain = c.createGain();
+  nGain.gain.setValueAtTime(0.5, t);
+  nGain.gain.linearRampToValueAtTime(0.35, t + 0.2);
+  nGain.gain.linearRampToValueAtTime(0, t + 2.4);
+  noise.connect(nGain).connect(c.destination);
+  noise.start(t);
+  noise.stop(t + 2.5);
+
+  // Subtle tonal body
+  const osc = c.createOscillator();
+  const oGain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(453, t);
+  osc.frequency.linearRampToValueAtTime(420, t + 0.18);
+  osc.frequency.linearRampToValueAtTime(453, t + 0.54);
+  oGain.gain.setValueAtTime(0.03, t);
+  oGain.gain.linearRampToValueAtTime(0, t + 1.0);
+  osc.connect(oGain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 1.0);
+}
+
+// ── Collect ──
+function playCollect() {
+  const c = getCtx();
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 807;
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.setValueAtTime(0, t + 0.01);
+  gain.gain.setValueAtTime(0.3, t + 0.03);
+  gain.gain.setValueAtTime(0, t + 0.04);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.05);
+}
+
+// ── Countdown ──
+function playCountdown() {
+  const c = getCtx();
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 453;
+  gain.gain.setValueAtTime(0.35, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 0.1);
+}
+
+// ── Enter Orbit ──
+function playEnterOrbit() {
+  const c = getCtx();
+  const t = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 751;
+  gain.gain.setValueAtTime(0.4, t);
+  gain.gain.linearRampToValueAtTime(0.35, t + 0.2);
+  gain.gain.linearRampToValueAtTime(0, t + 2.4);
+  osc.connect(gain).connect(c.destination);
+  osc.start(t);
+  osc.stop(t + 2.5);
+}
+
+// ── Engine (continuous noise) ──
+let engineSource = null;
+let engineGain = null;
+
+function startEngine() {
+  const c = getCtx();
+  if (engineSource) return;
+  const buf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < c.sampleRate; i++) d[i] = Math.random() * 2 - 1;
+  engineSource = c.createBufferSource();
+  engineSource.buffer = buf;
+  engineSource.loop = true;
+  engineGain = c.createGain();
+  engineGain.gain.setValueAtTime(0, c.currentTime);
+  engineGain.gain.setTargetAtTime(0.25, c.currentTime, 0.02);
+  engineSource.connect(engineGain).connect(c.destination);
+  engineSource.start();
+  document.getElementById('engineBtn').classList.add('held');
+}
+
+function stopEngine() {
+  if (!engineSource) return;
+  const c = getCtx();
+  engineGain.gain.setTargetAtTime(0, c.currentTime, 0.05);
+  const src = engineSource;
+  engineSource = null;
+  setTimeout(() => { try { src.stop(); } catch(e) {} }, 150);
+  document.getElementById('engineBtn').classList.remove('held');
+}
+
+// ── Shield/Tractor (pulsed low square hum) ──
+let shieldOsc = null;
+let shieldGain = null;
+let shieldLfo = null;
+
+function startShield() {
+  const c = getCtx();
+  if (shieldOsc) return;
+
+  shieldOsc = c.createOscillator();
+  shieldOsc.type = 'square';
+  shieldOsc.frequency.value = 40;
+
+  shieldGain = c.createGain();
+  shieldGain.gain.value = 0;
+
+  // LFO for 12.5Hz pulsing (vsync_count AND $02 toggle)
+  shieldLfo = c.createOscillator();
+  shieldLfo.type = 'square';
+  shieldLfo.frequency.value = 12.5;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 0.15;
+  shieldLfo.connect(lfoGain);
+  lfoGain.connect(shieldGain.gain);
+
+  shieldOsc.connect(shieldGain).connect(c.destination);
+  shieldOsc.start();
+  shieldLfo.start();
+  document.getElementById('shieldBtn').classList.add('held');
+}
+
+function stopShield() {
+  if (!shieldOsc) return;
+  try { shieldOsc.stop(); } catch(e) {}
+  try { shieldLfo.stop(); } catch(e) {}
+  shieldOsc = null;
+  shieldLfo = null;
+  shieldGain = null;
+  document.getElementById('shieldBtn').classList.remove('held');
+}
+
+// ── Keyboard shortcuts ──
+const held = {};
+document.addEventListener('keydown', e => {
+  if (held[e.key]) return;
+  held[e.key] = true;
+  switch(e.key) {
+    case '1': playOwnGun(); break;
+    case '2': playHostileGun(); break;
+    case '3': playExplosion(); break;
+    case '4': playCollect(); break;
+    case '5': playCountdown(); break;
+    case '6': playEnterOrbit(); break;
+    case 'e': case 'E': startEngine(); break;
+    case 's': case 'S': startShield(); break;
+  }
+});
+document.addEventListener('keyup', e => {
+  held[e.key] = false;
+  switch(e.key) {
+    case 'e': case 'E': stopEngine(); break;
+    case 's': case 'S': stopShield(); break;
+  }
+});
+</script>
+</body>
+</html>

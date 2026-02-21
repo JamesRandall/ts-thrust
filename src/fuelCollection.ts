@@ -20,6 +20,7 @@ export interface FuelCollectionState {
   tractorCounters: number[];
   collectingFuelIndex: number;
   tickCounter: number;
+  collectedThisTick: boolean;
 }
 
 export function createFuelCollectionState(numFuel: number): FuelCollectionState {
@@ -27,6 +28,7 @@ export function createFuelCollectionState(numFuel: number): FuelCollectionState 
     tractorCounters: new Array(numFuel).fill(0),
     collectingFuelIndex: -1,
     tickCounter: 0,
+    collectedThisTick: false,
   };
 }
 
@@ -41,6 +43,7 @@ export function tickFuelCollection(
   game: GameState,
 ): void {
   state.collectingFuelIndex = -1;
+  state.collectedThisTick = false;
 
   for (let i = 0; i < level.fuel.length; i++) {
     if (destroyedFuel.has(i)) continue;
@@ -61,6 +64,7 @@ export function tickFuelCollection(
     if (state.tractorCounters[i] >= FUEL_TRACTOR_THRESHOLD) {
       destroyedFuel.add(i);
       game.score += FUEL_SCORE;
+      state.collectedThisTick = true;
     }
 
     break;

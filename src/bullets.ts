@@ -14,6 +14,7 @@ export interface TurretFiringState {
   bullets: Bullet[];
   shootProbability: number;
   tickCounter: number;
+  turretsFiredThisTick: boolean;
 }
 
 const MAX_BULLETS = 31;
@@ -37,6 +38,7 @@ export function createTurretFiringState(): TurretFiringState {
     bullets: [],
     shootProbability: 1,
     tickCounter: 0,
+    turretsFiredThisTick: false,
   };
 }
 
@@ -52,6 +54,7 @@ export function tickTurrets(
   destroyedTurrets?: Set<number>,
   gunsSuppressed?: boolean,
 ): void {
+  state.turretsFiredThisTick = false;
   // Process each turret
   for (let i = 0; i < level.turrets.length; i++) {
     if (destroyedTurrets?.has(i)) continue;
@@ -96,6 +99,7 @@ export function tickTurrets(
       dx,
       dy,
     });
+    state.turretsFiredThisTick = true;
   }
 
   // Update all bullets: move, remove when off-screen
@@ -168,6 +172,7 @@ export interface PlayerShootingState {
   bullets: PlayerBullet[];   // exactly 4 slots (round-robin)
   bulletIndex: number;       // 0-3, advances after each shot
   pressedFire: boolean;      // single-shot latch
+  firedThisTick: boolean;
 }
 
 export function createPlayerShootingState(): PlayerShootingState {
@@ -180,6 +185,7 @@ export function createPlayerShootingState(): PlayerShootingState {
     ],
     bulletIndex: 0,
     pressedFire: false,
+    firedThisTick: false,
   };
 }
 
@@ -194,6 +200,8 @@ export function tickPlayerShooting(
   shipVY: number,
 ): void {
   // Gate 1: pod destroying player — skip for now (not implemented)
+
+  state.firedThisTick = false;
 
   // Gate 2: shield/fire mutual exclusion
   if (shieldActive) {
@@ -234,6 +242,7 @@ export function tickPlayerShooting(
 
   slot.active = true;
   slot.lifetime = 40;
+  state.firedThisTick = true;
 
   // Advance round-robin index
   state.bulletIndex = (state.bulletIndex + 1) & 0x03;

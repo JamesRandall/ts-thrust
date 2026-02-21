@@ -16,6 +16,8 @@ import {renderStars} from "./stars";
 import {bbcMicroColours} from "./rendering";
 import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScreen} from "./titleScreen";
 import {PostProcessor} from "./postProcessing";
+import {ThrustSounds} from "./sound";
+import {loadScores, saveScores, getHighScoreRank, insertScore, renderScoreboard, ScoreEntry} from "./scoreboard";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -48,7 +50,16 @@ let game = createGame(levels[0]);
 const collisionBuf = createCollisionBuffer(INTERNAL_W, INTERNAL_H);
 
 const keys = new Set<string>();
-window.addEventListener("keydown", (e) => { keys.add(e.code); e.preventDefault(); });
+const charQueue: string[] = [];
+let highScoreEntry: { active: boolean; rank: number; name: string; scores: ScoreEntry[] } | null = null;
+
+window.addEventListener("keydown", (e) => {
+  keys.add(e.code);
+  if (highScoreEntry?.active) {
+    charQueue.push(e.key);
+  }
+  e.preventDefault();
+});
 window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 
 const title = createTitleScreen();
@@ -59,6 +70,7 @@ let showFps = false;
 let paused = false;
 
 const postProcessor = new PostProcessor(canvas, ppCanvas, INTERNAL_W, INTERNAL_H);
+const sounds = new ThrustSounds();
 
 // Teleport animation constants
 const TELEPORT_FRAME_DURATION = 1 / 25;  // 40ms per step (half speed)
@@ -237,7 +249,43 @@ async function startGame() {
       if (keys.size > 0) {
         keys.clear();
         title.active = false;
+        sounds.resume();
         startTeleport(game, false);
+      }
+
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    // High score entry mode
+    if (highScoreEntry?.active) {
+      sounds.stopAll();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Build a preview of scores with the new entry inserted
+      const previewScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, game.score, highScoreEntry.name);
+
+      renderScoreboard(ctx, INTERNAL_W, previewScores, highScoreEntry.rank, highScoreEntry.name);
+
+      // Process character input from queue
+      while (charQueue.length > 0) {
+        const ch = charQueue.shift()!;
+        if (ch === "Enter") {
+          // Confirm name
+          const finalName = highScoreEntry.name || "PLAYER";
+          const finalScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, game.score, finalName);
+          saveScores(finalScores);
+          highScoreEntry = null;
+          keys.clear();
+          resetTitleScreen(title);
+          game = createGame(levels[0], 0);
+          break;
+        } else if (ch === "Backspace") {
+          highScoreEntry.name = highScoreEntry.name.slice(0, -1);
+        } else if (ch.length === 1 && /^[a-zA-Z]$/.test(ch) && highScoreEntry.name.length < 9) {
+          highScoreEntry.name += ch.toUpperCase();
+        }
       }
 
       postProcessFrame(time);
@@ -247,6 +295,22 @@ async function startGame() {
 
     // Game over state — wait for any key to restart
     if (game.gameOver) {
+      sounds.stopAll();
+
+      // Check for high score on first frame of game over
+      if (!highScoreEntry) {
+        const scores = loadScores();
+        const rank = getHighScoreRank(scores, game.score);
+        if (rank >= 0) {
+          highScoreEntry = { active: true, rank, name: "", scores };
+          charQueue.length = 0; // clear any queued chars
+          keys.clear();
+          postProcessFrame(time);
+          requestAnimationFrame(frame);
+          return;
+        }
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
       drawCenteredMessage("GAME OVER");
@@ -265,6 +329,7 @@ async function startGame() {
 
     // Message overlay — black screen with status bar and text
     if (game.messageTimer > 0) {
+      sounds.stopAll();
       game.messageTimer--;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
@@ -308,6 +373,8 @@ async function startGame() {
 
     // Teleport animation
     if (game.teleport) {
+      sounds.stopEngine();
+      sounds.stopShield();
       game.teleport.timer += dt;
       while (game.teleport.timer >= TELEPORT_FRAME_DURATION) {
         game.teleport.timer -= TELEPORT_FRAME_DURATION;
@@ -377,6 +444,7 @@ async function startGame() {
     // Number keys switch level (debug)
     for (let i = 0; i < levels.length; i++) {
       if (keys.has(`Digit${i + 1}`)) {
+        sounds.stopAll();
         game = createGame(levels[i], i);
         keys.delete(`Digit${i + 1}`);
         break;
@@ -384,6 +452,52 @@ async function startGame() {
     }
 
     tick(game, dt, keys);
+    sounds.tick();
+
+    // --- Sound triggers from game tick events ---
+    const dying = game.deathSequence !== null;
+    const thrustActive = !dying && keys.has("KeyW") && !game.fuelEmpty;
+    const shieldKeyDown = !dying && keys.has("Space") && !game.fuelEmpty;
+
+    // Engine: continuous noise while thrusting
+    if (thrustActive && !shieldKeyDown) {
+      sounds.startEngine();
+    } else {
+      sounds.stopEngine();
+    }
+
+    // Shield/tractor: continuous hum while shield key held
+    if (shieldKeyDown) {
+      sounds.startShield();
+    } else {
+      sounds.stopShield();
+    }
+
+    // Stop continuous sounds on death
+    if (dying) {
+      sounds.stopEngine();
+      sounds.stopShield();
+    }
+
+    // Player gun fired
+    if (game.playerShooting.firedThisTick) {
+      sounds.playOwnGun();
+    }
+
+    // Hostile turret fired
+    if (game.turretFiring.turretsFiredThisTick) {
+      sounds.playHostileGun();
+    }
+
+    // Fuel collected
+    if (game.fuelCollection.collectedThisTick) {
+      sounds.playCollect();
+    }
+
+    // Countdown beep
+    if (game.generator.countdownBeepThisTick) {
+      sounds.playCountdown();
+    }
 
     // Camera from scroll state
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
@@ -409,6 +523,7 @@ async function startGame() {
       const t = game.level.turrets[idx];
       spawnExplosion(game.explosions, t.x + 2, t.y + 4, bbcMicroColours.yellow);
       game.score += 750;
+      sounds.playExplosion();
     }
     // Fuel explosions: type 1 ($FF) = both landscape + object colours combined
     const fuelExplosionColour = orColours(game.level.terrainColor, game.level.objectColor);
@@ -417,6 +532,7 @@ async function startGame() {
       const f = game.level.fuel[idx];
       spawnExplosion(game.explosions, f.x + 2, f.y + 4, fuelExplosionColour);
       game.score += 150;
+      sounds.playExplosion();
     }
     // Generator hit
     if (bulletHits.hitGenerator && !game.generator.destroyed) {
@@ -436,6 +552,7 @@ async function startGame() {
       // Ship collision → destroy ship (ship dies first)
       if (collision !== CollisionResult.None) {
         destroyPlayerShip(game);
+        sounds.playExplosion();
       }
 
       // Tether line + pod collision with terrain (only when pod is attached, not during tractor beam)
@@ -448,6 +565,7 @@ async function startGame() {
         // Test tether line
         if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
           destroyAttachedPod(game);
+          sounds.playExplosion();
         }
         // Test pod sprite area
         else {
@@ -455,6 +573,7 @@ async function startGame() {
           const podTop = podCY - Math.floor(podSprite.height / 2);
           if (testRectCollision(collisionImageData, podLeft, podTop, podSprite.width, podSprite.height)) {
             destroyAttachedPod(game);
+            sounds.playExplosion();
           }
         }
       }
@@ -463,6 +582,7 @@ async function startGame() {
       const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
       if (bulletHitShip && !game.shieldActive) {
         destroyPlayerShip(game);
+        sounds.playExplosion();
       }
     }
 
@@ -471,12 +591,16 @@ async function startGame() {
       game.planetKilled = false;
       if (!game.deathSequence) {
         destroyPlayerShip(game);
+        sounds.playExplosion();
       }
     }
 
     // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
+      sounds.stopEngine();
+      sounds.stopShield();
+      sounds.playEnterOrbit();
       startTeleport(game, true);
     }
 

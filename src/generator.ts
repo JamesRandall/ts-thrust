@@ -10,6 +10,7 @@ export interface GeneratorState {
   destroyed: boolean;           // removed from level (no-overflow hit)
   visible: boolean;             // toggled during countdown flash
   tickCounter: number;          // for smoke interval + recharge decrement
+  countdownBeepThisTick: boolean;
 }
 
 export function createGeneratorState(): GeneratorState {
@@ -21,6 +22,7 @@ export function createGeneratorState(): GeneratorState {
     destroyed: false,
     visible: true,
     tickCounter: 0,
+    countdownBeepThisTick: false,
   };
 }
 
@@ -32,6 +34,7 @@ export function tickGenerator(
   destroyedFuel: Set<number>,
 ): { playerKilled: boolean } {
   let playerKilled = false;
+  state.countdownBeepThisTick = false;
 
   state.tickCounter = (state.tickCounter + 1) & 0xFF;
 
@@ -49,6 +52,7 @@ export function tickGenerator(
       state.countdownTicks = 32;
       if (state.planetCountdown > 0) {
         state.planetCountdown--;
+        state.countdownBeepThisTick = true;
       }
     }
     if (state.planetCountdown === 0) {
