@@ -27,6 +27,10 @@ const ppCanvas = document.getElementById("postprocess") as HTMLCanvasElement;
 const INTERNAL_W = 320;
 const INTERNAL_H = 256;
 
+// Score values (matching spec)
+const SCORE_GUN_DESTROYED = 750;
+const SCORE_FUEL_SHOT = 150;
+
 canvas.width = INTERNAL_W;
 canvas.height = INTERNAL_H;
 ctx.imageSmoothingEnabled = false;
@@ -540,7 +544,7 @@ async function startGame() {
       game.destroyedTurrets.add(idx);
       const t = game.level.turrets[idx];
       spawnExplosion(game.explosions, t.x + 2, t.y + 4, bbcMicroColours.yellow);
-      addScore(game, 750);
+      addScore(game, SCORE_GUN_DESTROYED);
       sounds.playExplosion();
     }
     // Fuel explosions: type 1 ($FF) = both landscape + object colours combined
@@ -549,7 +553,7 @@ async function startGame() {
       game.destroyedFuel.add(idx);
       const f = game.level.fuel[idx];
       spawnExplosion(game.explosions, f.x + 2, f.y + 4, fuelExplosionColour);
-      addScore(game, 150);
+      addScore(game, SCORE_FUEL_SHOT);
       sounds.playExplosion();
     }
     // Generator hit

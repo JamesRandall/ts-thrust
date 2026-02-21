@@ -18,6 +18,14 @@ export interface TurretFiringState {
 }
 
 const MAX_BULLETS = 31;
+const ANGLE_MASK = 0x1F;
+const BYTE_MASK = 0xFF;
+const GUN_SPREAD_INDEX_MASK = 0x03;
+const GUN_BASE_ANGLE_MASK = 0x1C;
+const GUN_JITTER_MASK = 0x03;
+const BULLET_LIFETIME = 40;
+const BULLET_INDEX_MASK = 0x03;
+const BULLET_INITIAL_ADVANCE = 2;
 
 const SPREAD_TABLE = [0x01, 0x03, 0x07, 0x0F] as const;
 
@@ -75,15 +83,15 @@ export function tickTurrets(
 
     // Decode gun param and calculate firing angle
     const param = turret.gunParam;
-    const spreadIndex = param & 0x03;
-    const baseAngleOffset = param & 0x1C;
+    const spreadIndex = param & GUN_SPREAD_INDEX_MASK;
+    const baseAngleOffset = param & GUN_BASE_ANGLE_MASK;
     const spreadMask = SPREAD_TABLE[spreadIndex];
 
     const rndA = randomByte();
     const rndB = randomByte();
-    const jitter = rndA & 0x03;
+    const jitter = rndA & GUN_JITTER_MASK;
     const spread = rndB & spreadMask;
-    const angle = (spread + baseAngleOffset + jitter) & 0x1F;
+    const angle = (spread + baseAngleOffset + jitter) & ANGLE_MASK;
 
     // Get bullet velocity from angle tables
     const dx = ANGLE_X[angle];
@@ -111,7 +119,7 @@ export function tickTurrets(
     return sx > -2 && sx < viewportW && sy > -2 && sy < viewportH;
   });
 
-  state.tickCounter = (state.tickCounter + 1) & 0xFF;
+  state.tickCounter = (state.tickCounter + 1) & BYTE_MASK;
 }
 
 export function renderBullets(
@@ -228,7 +236,7 @@ export function tickPlayerShooting(
   slot.y = shipY;
 
   // Velocity from ship angle
-  const angleIdx = Math.round(shipAngle) & 0x1F;
+  const angleIdx = Math.round(shipAngle) & ANGLE_MASK;
   slot.dx = ANGLE_X[angleIdx];
   slot.dy = ANGLE_Y[angleIdx];
 
@@ -237,15 +245,15 @@ export function tickPlayerShooting(
   slot.dy += shipVY;
 
   // Advance 2 steps to clear ship sprite (after full velocity is set)
-  slot.x += slot.dx * 2;
-  slot.y += slot.dy * 2;
+  slot.x += slot.dx * BULLET_INITIAL_ADVANCE;
+  slot.y += slot.dy * BULLET_INITIAL_ADVANCE;
 
   slot.active = true;
-  slot.lifetime = 40;
+  slot.lifetime = BULLET_LIFETIME;
   state.firedThisTick = true;
 
   // Advance round-robin index
-  state.bulletIndex = (state.bulletIndex + 1) & 0x03;
+  state.bulletIndex = (state.bulletIndex + 1) & BULLET_INDEX_MASK;
 }
 
 export function tickPlayerBullets(

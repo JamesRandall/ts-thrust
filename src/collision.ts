@@ -113,7 +113,7 @@ export function renderCollisionBuffer(
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
       const sy = Math.round(wy(f.y) - camY);
-      const fx = Math.round(sx - fuelSprite.width / 2);
+      const fx = sx;
       const fy = sy - 2;
       ctx.fillStyle = bbcMicroColours.magenta;
       ctx.fillRect(fx, fy, fuelSprite.width, fuelSprite.height);

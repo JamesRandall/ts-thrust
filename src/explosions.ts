@@ -1,6 +1,17 @@
 import { ANGLE_X, ANGLE_Y } from "./physics";
 import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
 
+const EXPLOSION_PARTICLE_COUNT = 8;
+const EXPLOSION_ANGLE_STEP = 4;
+const EXPLOSION_VELOCITY_DIVISOR = 16;
+const EXPLOSION_INITIAL_KICK = 2;
+const ANGLE_MASK = 0x1F;
+const RANDOM_OFFSET_MASK = 0x03;
+const MAGNITUDE_MASK = 0x03;
+const MAGNITUDE_BASE = 2;
+const LIFETIME_XOR_MASK = 0x1F;
+const LIFETIME_NIBBLE_MASK = 0x0F;
+
 export interface ExplosionParticle {
   x: number;
   y: number;
@@ -23,38 +34,38 @@ function randomByte(): number {
 }
 
 export function spawnExplosion(state: ExplosionState, worldX: number, worldY: number, color: string, startAngle?: number): void {
-  let explosionAngle = startAngle !== undefined ? (startAngle & 0x1F) : (randomByte() & 0x1F);
+  let explosionAngle = startAngle !== undefined ? (startAngle & ANGLE_MASK) : (randomByte() & ANGLE_MASK);
 
-  for (let p = 0; p < 8; p++) {
+  for (let p = 0; p < EXPLOSION_PARTICLE_COUNT; p++) {
     const rndA = randomByte();
     const rndB = randomByte();
 
     // Random offset 0–3 added to angle
-    const randomOffset = rndA & 0x03;
-    const angle = (explosionAngle + randomOffset) & 0x1F;
+    const randomOffset = rndA & RANDOM_OFFSET_MASK;
+    const angle = (explosionAngle + randomOffset) & ANGLE_MASK;
 
     // Base velocity from angle tables, divided by 16
-    const baseDx = ANGLE_X[angle] / 16;
-    const baseDy = ANGLE_Y[angle] / 16;
+    const baseDx = ANGLE_X[angle] / EXPLOSION_VELOCITY_DIVISOR;
+    const baseDy = ANGLE_Y[angle] / EXPLOSION_VELOCITY_DIVISOR;
 
     // Magnitude = 2–5×
-    const magnitude = (rndB & 0x03) + 2;
+    const magnitude = (rndB & MAGNITUDE_MASK) + MAGNITUDE_BASE;
     const dx = baseDx * magnitude;
     const dy = baseDy * magnitude;
 
     // Lifetime: inverse correlation with speed
     // (magnitude << 3) ^ 0x1F gives higher values for lower magnitudes
-    const lifetimeBase = (magnitude << 3) ^ 0x1F;
-    const lifetime = ((rndA & 0x0F) >> 1) + lifetimeBase + 8;
+    const lifetimeBase = (magnitude << 3) ^ LIFETIME_XOR_MASK;
+    const lifetime = ((rndA & LIFETIME_NIBBLE_MASK) >> 1) + lifetimeBase + 8;
 
     // 2-step initial kick
-    const x = worldX + dx * 2;
-    const y = worldY + dy * 2;
+    const x = worldX + dx * EXPLOSION_INITIAL_KICK;
+    const y = worldY + dy * EXPLOSION_INITIAL_KICK;
 
     state.particles.push({ x, y, dx, dy, lifetime, color });
 
     // Advance explosion angle by 4 per particle (8×4 = 32, full circle)
-    explosionAngle = (explosionAngle + 4) & 0x1F;
+    explosionAngle = (explosionAngle + EXPLOSION_ANGLE_STEP) & ANGLE_MASK;
   }
 }
 

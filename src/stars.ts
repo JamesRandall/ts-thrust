@@ -18,6 +18,8 @@ const STAR_Y_OFFSET = 0x64;          // 100
 const STAR_X_RANDOM_MASK = 0x3F;     // 0–63
 const STAR_X_OFFSET = 5;
 const STAR_LIFETIME = 30;
+const STAR_GENERATION_MASK = 0x01;
+const STAR_TYPE_MASK = 0x01;
 
 function randomByte(): number {
   return Math.floor(Math.random() * 256);
@@ -45,7 +47,7 @@ export function tickStarField(
   state.tickCounter++;
 
   // Only generate on even ticks
-  if ((state.tickCounter & 0x01) !== 0) return;
+  if ((state.tickCounter & STAR_GENERATION_MASK) !== 0) return;
 
   // Only generate when above altitude threshold
   if (viewportY >= STAR_ALTITUDE_THRESHOLD) return;
@@ -60,7 +62,7 @@ export function tickStarField(
   const x = (rndB & STAR_X_RANDOM_MASK) + viewportX + STAR_X_OFFSET;
 
   // Type 1 ($FF) = both colour channels, Type 2 ($0F) = colour 1 only
-  const isType2 = (rndB & 0x01) !== 0;
+  const isType2 = (rndB & STAR_TYPE_MASK) !== 0;
   const color = isType2 ? objectColor : orColours(terrainColor, objectColor);
 
   state.stars.push({ x, y, lifetime: STAR_LIFETIME, color });
@@ -78,7 +80,7 @@ export function seedStarField(
     const rndB = randomByte();
     const y = rndA + STAR_Y_OFFSET;
     const x = (rndB & STAR_X_RANDOM_MASK) + viewportX + STAR_X_OFFSET;
-    const isType2 = (randomByte() & 0x01) !== 0;
+    const isType2 = (randomByte() & STAR_TYPE_MASK) !== 0;
     const color = isType2 ? objectColor : orColours(terrainColor, objectColor);
     const lifetime = Math.floor(Math.random() * STAR_LIFETIME) + 1;
     state.stars.push({ x, y, lifetime, color });

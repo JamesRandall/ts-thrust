@@ -21,6 +21,15 @@ const SCROLL_STEP_S = 3 / 100;
 // Fuel burn active slots — thrust only burns fuel on these slots (6 of 16)
 const FUEL_ACTIVE_SLOTS = new Set([0, 3, 5, 8, 11, 13]);
 
+const TICK_SLOT_MASK = 0x0F;
+const SHIELD_GATE_MASK = 0x02;
+const BYTE_MASK = 0xFF;
+const BONUS_LOOPS_BASE = 5;
+const BONUS_LOOPS_PLANET_DESTROYED = 5;
+const BONUS_SCORE_PER_LOOP = 400;
+const INITIAL_FUEL = 1000;
+const EXTRA_LIFE_THRESHOLD = 10000;
+
 // Tractor beam distance thresholds (screen-space approximate distance)
 const TRACTOR_BEAM_START_DISTANCE = 0x75;  // 117 — close zone
 const TRACTOR_ATTACH_DISTANCE = 0x84;      // 132 — far zone
@@ -140,7 +149,7 @@ export function createGame(
       y: level.startingPosition.y,
       rotation: (startAngle / 32) * Math.PI * 2,
     },
-    fuel: 1000,
+    fuel: INITIAL_FUEL,
     lives: persistent?.lives ?? 3,
     score: persistent?.score ?? 0,
     collisionResult: CollisionResult.None,
@@ -325,9 +334,9 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     scrollUpdated = true;
 
     // Fuel burn logic per game tick
-    const slot = state.fuelTickCounter & 0x0F;
-    const shieldGate = (state.fuelTickCounter & 0x02) !== 0;
-    state.fuelTickCounter = (state.fuelTickCounter + 1) & 0xFF;
+    const slot = state.fuelTickCounter & TICK_SLOT_MASK;
+    const shieldGate = (state.fuelTickCounter & SHIELD_GATE_MASK) !== 0;
+    state.fuelTickCounter = (state.fuelTickCounter + 1) & BYTE_MASK;
 
     // Thrust fuel: burns on active slots only (6/16 ticks)
     if (thrustDown && !state.fuelEmpty && FUEL_ACTIVE_SLOTS.has(slot)) {
@@ -514,7 +523,7 @@ export function retryLevel(state: GameState): void {
   state.doorState = createDoorState();
   state.starField = createStarFieldState();
   seedStarField(state.starField, state.scroll.windowPos.x, state.level.objectColor, state.level.terrainColor);
-  state.fuel = 1000;
+  state.fuel = INITIAL_FUEL;
   state.fuelEmpty = false;
   state.fuelTickCounter = 0;
   state.planetKilled = false;
@@ -580,18 +589,18 @@ export function advanceToNextLevel(state: GameState): GameState {
 
 /** Add points and award extra lives for each 10,000-point boundary crossed. */
 export function addScore(state: GameState, points: number): void {
-  const oldThousands = Math.floor(state.score / 10000);
+  const oldThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
   state.score += points;
-  const newThousands = Math.floor(state.score / 10000);
+  const newThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
   state.lives += (newThousands - oldThousands);
 }
 
 /** Apply mission complete bonus scoring and extra lives. */
 export function missionComplete(state: GameState): void {
   state.missionNumber++;
-  let loopCount = state.levelNumber + 5;
-  if (state.generator.planetCountdown >= 0) loopCount += 5;
+  let loopCount = state.levelNumber + BONUS_LOOPS_BASE;
+  if (state.generator.planetCountdown >= 0) loopCount += BONUS_LOOPS_PLANET_DESTROYED;
   for (let i = 0; i < loopCount; i++) {
-    addScore(state, 400);
+    addScore(state, BONUS_SCORE_PER_LOOP);
   }
 }

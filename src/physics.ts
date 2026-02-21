@@ -75,9 +75,20 @@ const ANGLE_TO_X_FRAC = [
   0xC0, 0xC7, 0xD9, 0xF6, 0x1E, 0x4F, 0x86, 0xC2,
 ];
 
+const SIGNED_BYTE_THRESHOLD = 0x7F;
+const ANGLE_MASK = 0x1F;
+const BYTE_MASK = 0xFF;
+const TICK_SLOT_MASK = 0x0F;
+const ROTATION_SKIP_MASK = 0x03;
+const HIGH_NIBBLE_MASK = 0xF0;
+const ANGLE_SEARCH_STEP_INT_INITIAL = 0x0A;
+const ANGLE_SEARCH_STEP_FRAC_INITIAL = 0xAB;
+const ANGLE_SEARCH_PASSES = 7;
+const ANGLE_SEARCH_CANDIDATES = 3;
+
 /** Convert the original signed Q7.8 pair to a float. */
 function q78ToFloat(intByte: number, fracByte: number): number {
-  const signed = intByte > 0x7F ? intByte - 256 : intByte;
+  const signed = intByte > SIGNED_BYTE_THRESHOLD ? intByte - 256 : intByte;
   return signed + fracByte / 256;
 }
 
@@ -304,13 +315,13 @@ export class ThrustPhysics {
   // -----------------------------------------------------------------------
 
   private tickStep(input: ThrustInput): void {
-    const slot = this.tickCounter & 0x0F;
-    this.tickCounter = (this.tickCounter + 1) & 0xFF;
+    const slot = this.tickCounter & TICK_SLOT_MASK;
+    this.tickCounter = (this.tickCounter + 1) & BYTE_MASK;
 
     const s = this.state;
 
     // --- Rotation: 3 out of every 4 ticks, integer steps only ---
-    if ((slot & 0x03) !== 0 && input.rotate !== 0) {
+    if ((slot & ROTATION_SKIP_MASK) !== 0 && input.rotate !== 0) {
       s.angle = ((s.angle + input.rotate) + 32) % 32;
     }
 
@@ -318,7 +329,7 @@ export class ThrustPhysics {
 
     // --- Step 1: Force calculation (active slots only — 6 of every 16 ticks) ---
     if (isActiveSlot) {
-      const angleIdx = s.angle & 0x1F;
+      const angleIdx = s.angle & ANGLE_MASK;
 
       // Gravity
       s.forceY += this.gravity;
@@ -367,7 +378,7 @@ export class ThrustPhysics {
 
   private applyThrustTorque(angleIdx: number): void {
     const pod = this.state.pod;
-    const diffAngle = ((angleIdx - Math.round(pod.angleShipToPod)) & 0x1F);
+    const diffAngle = ((angleIdx - Math.round(pod.angleShipToPod)) & ANGLE_MASK);
     const tangentialForce = ANGLE_X[diffAngle] * 8;
     pod.angularVelocity += tangentialForce / 2;
   }
@@ -383,11 +394,11 @@ export class ThrustPhysics {
 
     while (pod.angleFrac >= 256) {
       pod.angleFrac -= 256;
-      pod.angleShipToPod = (pod.angleShipToPod + 1) & 0x1F;
+      pod.angleShipToPod = (pod.angleShipToPod + 1) & ANGLE_MASK;
     }
     while (pod.angleFrac < 0) {
       pod.angleFrac += 256;
-      pod.angleShipToPod = (pod.angleShipToPod - 1 + 32) & 0x1F;
+      pod.angleShipToPod = (pod.angleShipToPod - 1 + 32) & ANGLE_MASK;
     }
   }
 
@@ -404,8 +415,8 @@ export class ThrustPhysics {
     // rounding bias, with carry propagating into angle_ship_to_pod.
     const fracPlusEight = pod.angleFrac + 8;
     const carry = fracPlusEight > 0xFF ? 1 : 0;
-    const topNibble = fracPlusEight & 0xF0;
-    let y = (pod.angleShipToPod + carry) & 0x1F;
+    const topNibble = fracPlusEight & HIGH_NIBBLE_MASK;
+    let y = (pod.angleShipToPod + carry) & ANGLE_MASK;
 
     // Start accumulator with the first sample at angle index y
     let dxAcc = ANGLE_X[y];
@@ -417,7 +428,7 @@ export class ThrustPhysics {
     // entry — this creates the elliptical tether shape.
     for (let x = pod.tetherIndex; x >= 0; x--) {
       if (topNibble === LOOKUP_TOP_NIBBLE[x]) {
-        y = (y + 1) & 0x1F;
+        y = (y + 1) & ANGLE_MASK;
       }
       dxAcc += ANGLE_X[y];
       dyAcc += ANGLE_Y[y];
@@ -472,15 +483,15 @@ export class ThrustPhysics {
     s.pod.angleShipToPod = 0;
     s.pod.angleFrac = 0;
 
-    let stepHi = 0x0A;
-    let stepLo = 0xAB;
+    let stepHi = ANGLE_SEARCH_STEP_INT_INITIAL;
+    let stepLo = ANGLE_SEARCH_STEP_FRAC_INITIAL;
 
-    for (let pass = 0; pass < 7; pass++) {
+    for (let pass = 0; pass < ANGLE_SEARCH_PASSES; pass++) {
       let bestDist = Infinity;
       let bestAngle = s.pod.angleShipToPod;
       let bestFrac = s.pod.angleFrac;
 
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < ANGLE_SEARCH_CANDIDATES; i++) {
         const { dx, dy } = this.calculateTetherDelta();
         const dist = Math.abs(dx - targetDx) + Math.abs(dy - targetDy);
 
@@ -492,8 +503,8 @@ export class ThrustPhysics {
 
         const newFrac = s.pod.angleFrac + stepLo;
         const carry = newFrac >= 256 ? 1 : 0;
-        s.pod.angleFrac = newFrac & 0xFF;
-        s.pod.angleShipToPod = (s.pod.angleShipToPod + stepHi + carry) & 0x1F;
+        s.pod.angleFrac = newFrac & BYTE_MASK;
+        s.pod.angleShipToPod = (s.pod.angleShipToPod + stepHi + carry) & ANGLE_MASK;
       }
 
       s.pod.angleShipToPod = bestAngle;
@@ -501,16 +512,16 @@ export class ThrustPhysics {
 
       const combined = (stepHi << 8) | stepLo;
       const halved = combined >> 1;
-      stepHi = (halved >> 8) & 0xFF;
-      stepLo = halved & 0xFF;
+      stepHi = (halved >> 8) & BYTE_MASK;
+      stepLo = halved & BYTE_MASK;
 
       const newFrac = s.pod.angleFrac - stepLo;
       if (newFrac < 0) {
-        s.pod.angleFrac = (newFrac + 256) & 0xFF;
-        s.pod.angleShipToPod = (s.pod.angleShipToPod - stepHi - 1) & 0x1F;
+        s.pod.angleFrac = (newFrac + 256) & BYTE_MASK;
+        s.pod.angleShipToPod = (s.pod.angleShipToPod - stepHi - 1) & ANGLE_MASK;
       } else {
-        s.pod.angleFrac = newFrac & 0xFF;
-        s.pod.angleShipToPod = (s.pod.angleShipToPod - stepHi) & 0x1F;
+        s.pod.angleFrac = newFrac & BYTE_MASK;
+        s.pod.angleShipToPod = (s.pod.angleShipToPod - stepHi) & ANGLE_MASK;
       }
     }
 

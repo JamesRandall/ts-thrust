@@ -2,6 +2,24 @@ import { ANGLE_X, ANGLE_Y } from "./physics";
 import { ExplosionState, spawnExplosion } from "./explosions";
 import { Level } from "./levels";
 
+const BYTE_MASK = 0xFF;
+const COUNTDOWN_FLASH_MASK = 0x04;
+const SMOKE_INTERVAL_MASK = 0x0F;
+const ANGLE_MASK = 0x1F;
+const RANDOM_OFFSET_MASK = 0x03;
+const MAGNITUDE_MASK = 0x03;
+const MAGNITUDE_BASE = 2;
+const LIFETIME_XOR_MASK = 0x1F;
+const LIFETIME_NIBBLE_MASK = 0x0F;
+const EXPLOSION_ANGLE_STEP = 4;
+const EXPLOSION_VELOCITY_DIVISOR = 16;
+const GENERATOR_HIT_DEBRIS_COUNT = 3;
+const RECHARGE_RANDOM_MASK = 0x1F;
+const RECHARGE_MAX = 255;
+const PLANET_COUNTDOWN_SECONDS = 10;
+const COUNTDOWN_TICKS_PER_SECOND = 32;
+const GENERATOR_SMOKE_OFFSET_X = 4;
+
 export interface GeneratorState {
   rechargeCounter: number;      // 0–255; while > 0 guns disabled
   rechargeIncrease: number;     // cumulative damage accumulator (init 50)
@@ -36,7 +54,7 @@ export function tickGenerator(
   let playerKilled = false;
   state.countdownBeepThisTick = false;
 
-  state.tickCounter = (state.tickCounter + 1) & 0xFF;
+  state.tickCounter = (state.tickCounter + 1) & BYTE_MASK;
 
   // Recharge decrement: every other tick
   if ((state.tickCounter & 1) === 0) {
@@ -52,7 +70,7 @@ export function tickGenerator(
   if (state.planetCountdown >= 0) {
     state.countdownTicks--;
     if (state.countdownTicks < 0) {
-      state.countdownTicks = 32;
+      state.countdownTicks = COUNTDOWN_TICKS_PER_SECOND;
       if (state.planetCountdown > 0) {
         state.planetCountdown--;
         state.countdownBeepThisTick = true;
@@ -64,7 +82,7 @@ export function tickGenerator(
 
     // Flash: if not destroyed and countdown still active
     if (!state.destroyed && state.planetCountdown > 0) {
-      state.visible = (state.countdownTicks & 0x04) !== 0;
+      state.visible = (state.countdownTicks & COUNTDOWN_FLASH_MASK) !== 0;
     }
 
     // Object cascade: destroy one non-destroyed turret and one non-destroyed fuel per tick
@@ -87,9 +105,9 @@ export function tickGenerator(
   }
 
   // Smoke: if not destroyed, rechargeCounter === 0, planetCountdown < 0, every 16 ticks
-  if (!state.destroyed && state.rechargeCounter === 0 && state.planetCountdown < 0 && (state.tickCounter & 0x0F) === 0) {
+  if (!state.destroyed && state.rechargeCounter === 0 && state.planetCountdown < 0 && (state.tickCounter & SMOKE_INTERVAL_MASK) === 0) {
     explosions.particles.push({
-      x: level.powerPlant.x + 4,
+      x: level.powerPlant.x + GENERATOR_SMOKE_OFFSET_X,
       y: level.powerPlant.y - 1.5,
       dx: 0,
       dy: -0.2,
@@ -108,21 +126,21 @@ export function handleGeneratorHit(
   bulletY: number,
 ): void {
   // Spawn 3-particle debris explosion at bullet position
-  let explosionAngle = Math.floor(Math.random() * 256) & 0x1F;
-  for (let p = 0; p < 3; p++) {
+  let explosionAngle = Math.floor(Math.random() * 256) & ANGLE_MASK;
+  for (let p = 0; p < GENERATOR_HIT_DEBRIS_COUNT; p++) {
     const rndA = Math.floor(Math.random() * 256);
     const rndB = Math.floor(Math.random() * 256);
-    const randomOffset = rndA & 0x03;
-    const angle = (explosionAngle + randomOffset) & 0x1F;
+    const randomOffset = rndA & RANDOM_OFFSET_MASK;
+    const angle = (explosionAngle + randomOffset) & ANGLE_MASK;
 
-    const baseDx = ANGLE_X[angle] / 16;
-    const baseDy = ANGLE_Y[angle] / 16;
-    const magnitude = (rndB & 0x03) + 2;
+    const baseDx = ANGLE_X[angle] / EXPLOSION_VELOCITY_DIVISOR;
+    const baseDy = ANGLE_Y[angle] / EXPLOSION_VELOCITY_DIVISOR;
+    const magnitude = (rndB & MAGNITUDE_MASK) + MAGNITUDE_BASE;
     const dx = baseDx * magnitude;
     const dy = baseDy * magnitude;
 
-    const lifetimeBase = (magnitude << 3) ^ 0x1F;
-    const lifetime = ((rndA & 0x0F) >> 1) + lifetimeBase + 8;
+    const lifetimeBase = (magnitude << 3) ^ LIFETIME_XOR_MASK;
+    const lifetime = ((rndA & LIFETIME_NIBBLE_MASK) >> 1) + lifetimeBase + 8;
 
     explosions.particles.push({
       x: bulletX,
@@ -133,23 +151,23 @@ export function handleGeneratorHit(
       color: "#ffffff",
     });
 
-    explosionAngle = (explosionAngle + 4) & 0x1F;
+    explosionAngle = (explosionAngle + EXPLOSION_ANGLE_STEP) & ANGLE_MASK;
   }
 
   // Calculate new recharge
-  const newRecharge = (Math.floor(Math.random() * 256) & 0x1F) + state.rechargeIncrease;
+  const newRecharge = (Math.floor(Math.random() * 256) & RECHARGE_RANDOM_MASK) + state.rechargeIncrease;
 
-  if (newRecharge > 255) {
+  if (newRecharge > RECHARGE_MAX) {
     // Overflow
     if (state.planetCountdown >= 0) {
       // Already counting down
-      state.rechargeCounter = 255;
+      state.rechargeCounter = RECHARGE_MAX;
     } else {
-      state.rechargeCounter = 255;
-      state.planetCountdown = 10;
+      state.rechargeCounter = RECHARGE_MAX;
+      state.planetCountdown = PLANET_COUNTDOWN_SECONDS;
       state.countdownTicks = 1;
     }
-    state.rechargeIncrease = newRecharge & 0xFF;
+    state.rechargeIncrease = newRecharge & BYTE_MASK;
   } else {
     // No overflow — stun turrets, accumulate damage
     state.rechargeCounter = newRecharge;

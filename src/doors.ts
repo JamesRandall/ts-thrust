@@ -1,6 +1,8 @@
 import { DoorConfig } from "./levels";
 import { Point, WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
 
+const DOOR_TIMER_INITIAL = 0xFF;
+
 export interface DoorState {
     counterA: number;
     counterB: number;
@@ -11,7 +13,7 @@ export function createDoorState(): DoorState {
 }
 
 export function triggerDoor(state: DoorState): void {
-    state.counterA = 0xFF;
+    state.counterA = DOOR_TIMER_INITIAL;
 }
 
 export function tickDoor(state: DoorState, config: DoorConfig | null): void {

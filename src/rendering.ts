@@ -268,7 +268,7 @@ export function renderLevel(
     if (fuelSprite) {
       const sx = Math.round(toScreenX(f.x));
       const sy = Math.round(wy(f.y) - camY);
-      drawRemappedSprite(ctx, fuelSprite, Math.round(sx - fuelSprite.width / 2), sy - 2, level.objectColor, level.terrainColor);
+      drawRemappedSprite(ctx, fuelSprite, sx, sy - 2, level.objectColor, level.terrainColor);
     } else {
       drawMarker(f.x, f.y, bbcMicroColours.magenta);
     }
@@ -403,6 +403,8 @@ export function drawStatusBar(
   drawText(ctx, scoreStr, scoreValX, valueY, bbcMicroColours.yellow, scale);
 }
 
+const FONT_MSB = 0x80;
+
 export function drawText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -426,7 +428,7 @@ export function drawText(
     for (let row = 0; row < CHAR_H; row++) {
       const byte = rows[row];
       for (let col = 0; col < CHAR_W; col++) {
-        if (byte & (0x80 >> col)) {
+        if (byte & (FONT_MSB >> col)) {
           ctx.fillRect(
             cursorX + col * scale,
             y + row * scale,

@@ -10,17 +10,31 @@ const envelopes: Record<number, number[]> = {
   4: [0x04, 0x01, 0xff, 0xff, 0xff, 0x12, 0x12, 0x12, 0x32, 0xf4, 0xf4, 0xf4, 0x6e, 0x46],
 };
 
+// OSWORD 7 channel IDs — low 2 bits = MOS channel, bit 4 = flush flag
+const CHANNEL_NOISE_FLUSH = 0x0010;
+const CHANNEL_TONE1_FLUSH = 0x0011;
+const CHANNEL_TONE2_FLUSH = 0x0012;
+const CHANNEL_TONE3_FLUSH = 0x0013;
+const CHANNEL_TONE2_QUEUED = 0x0002;
+
+// Engine pitch overrides (noise control register values)
+const NOISE_PERIODIC_2048 = 0x02;
+const NOISE_WHITE_1024 = 0x05;
+
+// Explosion sound suppression timer (31 ticks)
+const EXPLOSION_SOUND_DURATION = 0x1F;
+
 // Sound parameter definitions (OSWORD 7)
 const sounds = {
-  own_gun:     { channel: 0x0012, amplitude: 1,   pitch: 0x50, duration: 2   },
-  explosion_1: { channel: 0x0011, amplitude: 2,   pitch: 0x96, duration: 100 },
-  explosion_2: { channel: 0x0010, amplitude: 3,   pitch: 0x07, duration: 100 },
-  hostile_gun: { channel: 0x0013, amplitude: 4,   pitch: 0x1e, duration: 20  },
-  collect_1:   { channel: 0x0002, amplitude: -15, pitch: 0xbe, duration: 1   },
-  collect_2:   { channel: 0x0002, amplitude: 0,   pitch: 0xbe, duration: 2   },
-  engine:      { channel: 0x0010, amplitude: -10, pitch: 0x05, duration: 3   },
-  countdown:   { channel: 0x0002, amplitude: -15, pitch: 0x96, duration: 1   },
-  enter_orbit: { channel: 0x0012, amplitude: 3,   pitch: 0xb9, duration: 1   },
+  own_gun:     { channel: CHANNEL_TONE2_FLUSH, amplitude: 1,   pitch: 0x50, duration: 2   },
+  explosion_1: { channel: CHANNEL_TONE1_FLUSH, amplitude: 2,   pitch: 0x96, duration: 100 },
+  explosion_2: { channel: CHANNEL_NOISE_FLUSH, amplitude: 3,   pitch: 0x07, duration: 100 },
+  hostile_gun: { channel: CHANNEL_TONE3_FLUSH, amplitude: 4,   pitch: 0x1e, duration: 20  },
+  collect_1:   { channel: CHANNEL_TONE2_QUEUED, amplitude: -15, pitch: 0xbe, duration: 1   },
+  collect_2:   { channel: CHANNEL_TONE2_QUEUED, amplitude: 0,   pitch: 0xbe, duration: 2   },
+  engine:      { channel: CHANNEL_NOISE_FLUSH, amplitude: -10, pitch: NOISE_WHITE_1024, duration: 3   },
+  countdown:   { channel: CHANNEL_TONE2_QUEUED, amplitude: -15, pitch: 0x96, duration: 1   },
+  enter_orbit: { channel: CHANNEL_TONE2_FLUSH, amplitude: 3,   pitch: 0xb9, duration: 1   },
 } as const;
 
 type SoundName = keyof typeof sounds;
@@ -81,7 +95,7 @@ export class ThrustSounds {
   }
 
   playExplosion(): void {
-    this.soundTimer = 0x1f;
+    this.soundTimer = EXPLOSION_SOUND_DURATION;
     this.sendSound('explosion_1');
     this.sendSound('explosion_2');
   }
@@ -106,7 +120,7 @@ export class ThrustSounds {
 
   runEngine(isShield: boolean): void {
     if (this.soundTimer !== 0) return;
-    this.sendSound('engine', isShield ? 0x02 : 0x05);
+    this.sendSound('engine', isShield ? NOISE_PERIODIC_2048 : NOISE_WHITE_1024);
   }
 
   stopAll(): void {

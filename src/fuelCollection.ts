@@ -49,11 +49,11 @@ export function tickFuelCollection(
     if (destroyedFuel.has(i)) continue;
 
     const fuel = level.fuel[i];
-    const dx = fuel.x - playerX;
-    if (dx <= 0 || dx >= FUEL_PICKUP_RANGE_X) continue;
+    const dx = Math.abs(fuel.x - playerX);
+    if (dx >= FUEL_PICKUP_RANGE_X) continue;
 
-    const dy = fuel.y - playerY;
-    if (Math.abs(dy) >= FUEL_PICKUP_RANGE_Y) continue;
+    const dy = Math.abs(fuel.y - playerY);
+    if (dy >= FUEL_PICKUP_RANGE_Y) continue;
 
     if (!shieldActive || podAttached) continue;
 
