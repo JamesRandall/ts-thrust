@@ -40,7 +40,11 @@ function audioWorkletPlugin(): Plugin {
         if (chunk.type === 'chunk') {
           let code = chunk.code;
           for (const { oldName, newName } of renames) {
+            // Replace full path and basename-only references
             code = code.replaceAll(oldName, newName);
+            const oldBase = oldName.split('/').pop()!;
+            const newBase = newName.split('/').pop()!;
+            code = code.replaceAll(oldBase, newBase);
           }
           chunk.code = code;
         }
@@ -50,5 +54,6 @@ function audioWorkletPlugin(): Plugin {
 }
 
 export default defineConfig({
+  base: './',
   plugins: [audioWorkletPlugin()],
 });

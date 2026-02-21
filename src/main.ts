@@ -125,7 +125,7 @@ async function startGame() {
     loadSwitchSprites(),
   ]);
 
-  const sounds = await ThrustSounds.create();
+  const sounds = ThrustSounds.create();
 
   function renderScene(hideShip?: boolean, landscapeRevealed?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);

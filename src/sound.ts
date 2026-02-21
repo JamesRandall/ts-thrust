@@ -29,28 +29,34 @@ export class ThrustSounds {
   private ctx!: AudioContext;
   private node!: AudioWorkletNode;
   private soundTimer = 0;
+  private initialized = false;
 
   private constructor() {}
 
-  static async create(): Promise<ThrustSounds> {
-    const ts = new ThrustSounds();
-    ts.ctx = new AudioContext();
+  static create(): ThrustSounds {
+    return new ThrustSounds();
+  }
+
+  private async init(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    this.ctx = new AudioContext();
 
     const workletUrl = new URL('./sn76489-worklet.ts', import.meta.url);
-    await ts.ctx.audioWorklet.addModule(workletUrl);
+    await this.ctx.audioWorklet.addModule(workletUrl);
 
-    ts.node = new AudioWorkletNode(ts.ctx, 'sn76489-processor');
-    ts.node.connect(ts.ctx.destination);
+    this.node = new AudioWorkletNode(this.ctx, 'sn76489-processor');
+    this.node.connect(this.ctx.destination);
 
     // Define all 4 envelopes
     for (const [num, data] of Object.entries(envelopes)) {
-      ts.node.port.postMessage({ type: 'osword8', envNumber: Number(num), data });
+      this.node.port.postMessage({ type: 'osword8', envNumber: Number(num), data });
     }
-
-    return ts;
   }
 
   async resume(): Promise<void> {
+    await this.init();
     if (this.ctx.state === 'suspended') await this.ctx.resume();
   }
 
@@ -59,6 +65,7 @@ export class ThrustSounds {
   }
 
   private sendSound(name: SoundName, pitchOverride?: number): void {
+    if (!this.node) return;
     const s = sounds[name];
     this.node.port.postMessage({
       type: 'osword7',
@@ -103,6 +110,7 @@ export class ThrustSounds {
   }
 
   stopAll(): void {
+    if (!this.node) return;
     this.node.port.postMessage({ type: 'silenceAll' });
     this.soundTimer = 0;
   }
