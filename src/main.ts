@@ -51,7 +51,7 @@ const collisionBuf = createCollisionBuffer(INTERNAL_W, INTERNAL_H);
 
 const keys = new Set<string>();
 const charQueue: string[] = [];
-let highScoreEntry: { active: boolean; rank: number; name: string; scores: ScoreEntry[] } | null = null;
+let highScoreEntry: { active: boolean; rank: number; score: number; name: string; scores: ScoreEntry[] } | null = null;
 
 window.addEventListener("keydown", (e) => {
   keys.add(e.code);
@@ -134,7 +134,7 @@ async function startGame() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (!title.active) {
+    if (!title.active && !highScoreEntry?.active) {
       renderStars(ctx, game.starField, camX, camY);
     }
 
@@ -261,10 +261,10 @@ async function startGame() {
     // High score entry mode
     if (highScoreEntry?.active) {
       sounds.stopAll();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      renderScene(true);
 
       // Build a preview of scores with the new entry inserted
-      const previewScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, game.score, highScoreEntry.name);
+      const previewScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, highScoreEntry.score, highScoreEntry.name);
 
       renderScoreboard(ctx, INTERNAL_W, previewScores, highScoreEntry.rank, highScoreEntry.name);
 
@@ -274,11 +274,12 @@ async function startGame() {
         if (ch === "Enter") {
           // Confirm name
           const finalName = highScoreEntry.name || "PLAYER";
-          const finalScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, game.score, finalName);
+          const finalScores = insertScore(highScoreEntry.scores, highScoreEntry.rank, highScoreEntry.score, finalName);
           saveScores(finalScores);
           highScoreEntry = null;
           keys.clear();
           resetTitleScreen(title);
+          title.page = 1;
           game = createGame(levels[0], 0);
           break;
         } else if (ch === "Backspace") {
@@ -302,7 +303,8 @@ async function startGame() {
         const scores = loadScores();
         const rank = getHighScoreRank(scores, game.score);
         if (rank >= 0) {
-          highScoreEntry = { active: true, rank, name: "", scores };
+          highScoreEntry = { active: true, rank, score: game.score, name: "", scores };
+          game = createGame(levels[0], 0);
           charQueue.length = 0; // clear any queued chars
           keys.clear();
           postProcessFrame(time);

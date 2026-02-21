@@ -54,6 +54,16 @@ export function insertScore(scores: ScoreEntry[], rank: number, score: number, n
   return result.slice(0, 8);
 }
 
+const TITLE_ROW = 8;
+const SCORES_START_ROW = 10;
+const SCORES_ROW_SPACING = 1;
+const BOTTOM_ROW = 19;
+const CHAR_W = 8;
+
+function rowY(row: number): number {
+  return row * CHAR_W;
+}
+
 export function renderScoreboard(
   ctx: CanvasRenderingContext2D,
   screenWidth: number,
@@ -61,19 +71,19 @@ export function renderScoreboard(
   editingRank?: number,
   editingName?: string,
 ): void {
-  // Title "TOP EIGHT THRUSTERS" centered, row 2
+  // Title "TOP EIGHT THRUSTERS" centered
   const title = "TOP EIGHT THRUSTERS";
-  const titleX = Math.floor((screenWidth - title.length * 8) / 2);
-  drawText(ctx, title, titleX, 2 * 8, bbcMicroColours.green);
+  const titleX = Math.floor((screenWidth - title.length * CHAR_W) / 2);
+  drawText(ctx, title, titleX, rowY(TITLE_ROW), bbcMicroColours.green);
 
-  // 8 score rows starting at row 5
-  const startRow = 5;
+  // 8 score rows
   for (let i = 0; i < 8; i++) {
-    const y = (startRow + i * 2) * 8;
+    const row = SCORES_START_ROW + i * SCORES_ROW_SPACING;
+    const y = rowY(row);
 
     // Rank number (1-8)
     const rankStr = String(i + 1) + ".";
-    const rankX = 48;
+    const rankX = titleX - CHAR_W;
     drawText(ctx, rankStr, rankX, y, bbcMicroColours.yellow);
 
     // Score value - right-aligned in a field
@@ -82,37 +92,32 @@ export function renderScoreboard(
       : scores[i];
 
     const scoreStr = String(entry.score);
-    const scoreFieldX = 80;
-    const scoreFieldW = 6 * 8; // 6 chars wide
-    const scoreX = scoreFieldX + scoreFieldW - scoreStr.length * 8;
+    const scoreFieldX = rankX + 4 * CHAR_W;
+    const scoreFieldW = 6 * CHAR_W; // 6 chars wide
+    const scoreX = scoreFieldX + scoreFieldW - scoreStr.length * CHAR_W;
     drawText(ctx, scoreStr, scoreX, y, bbcMicroColours.yellow);
 
     // Name
-    const nameX = scoreFieldX + scoreFieldW + 16;
+    const nameX = scoreFieldX + scoreFieldW + 2 * CHAR_W;
     if (editingRank !== undefined && i === editingRank) {
       // Show editing name with blinking cursor
       const displayName = editingName ?? "";
-      drawText(ctx, displayName, nameX, y, bbcMicroColours.green);
-      // Blinking cursor using time
+      drawText(ctx, displayName, nameX, y, bbcMicroColours.magenta);
       const cursorVisible = Math.floor(Date.now() / 300) % 2 === 0;
       if (cursorVisible && displayName.length < 9) {
-        const cursorX = nameX + displayName.length * 8;
+        const cursorX = nameX + displayName.length * CHAR_W;
         ctx.fillStyle = bbcMicroColours.green;
-        ctx.fillRect(cursorX, y, 8, 5);
+        ctx.fillRect(cursorX, y, CHAR_W, 5);
       }
     } else {
-      drawText(ctx, entry.name, nameX, y, bbcMicroColours.green);
+      drawText(ctx, entry.name, nameX, y, bbcMicroColours.yellow);
     }
   }
 
-  // "PRESS SPACE BAR TO START" at bottom
-  if (editingRank === undefined) {
-    const bottomText = "PRESS SPACE BAR TO START";
-    const bottomX = Math.floor((screenWidth - bottomText.length * 8) / 2);
-    drawText(ctx, bottomText, bottomX, 23 * 8, bbcMicroColours.red);
-  } else {
-    const bottomText = "ENTER YOUR NAME";
-    const bottomX = Math.floor((screenWidth - bottomText.length * 8) / 2);
-    drawText(ctx, bottomText, bottomX, 23 * 8, bbcMicroColours.red);
-  }
+  // Bottom prompt
+  const bottomText = editingRank === undefined
+    ? "PRESS SPACE BAR TO START"
+    : "ENTER YOUR NAME";
+  const bottomX = Math.floor((screenWidth - bottomText.length * CHAR_W) / 2);
+  drawText(ctx, bottomText, bottomX, rowY(BOTTOM_ROW), bbcMicroColours.red);
 }
