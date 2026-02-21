@@ -361,7 +361,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     }
 
     updateScroll(
-        { x: state.player.x, y: state.player.y },
+        { x: state.physics.state.x, y: state.physics.state.y },
         { x: state.physics.state.forceX, y: state.physics.state.forceY },
         state.scroll,
         state.scrollConfig,
@@ -473,7 +473,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
   // camera stale while ship/pod positions have advanced, causing visible jitter.
   if (!scrollUpdated) {
     updateScroll(
-        { x: state.player.x, y: state.player.y },
+        { x: state.physics.state.x, y: state.physics.state.y },
         { x: state.physics.state.forceX, y: state.physics.state.forceY },
         state.scroll,
         state.scrollConfig,

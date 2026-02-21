@@ -411,9 +411,12 @@ export class ThrustPhysics {
 
     // Replicate calculate_attached_pod_vector from the 6502 source.
     //
-    // The original adds 8 to angle_var_B_accumulate (our angleFrac) as a
-    // rounding bias, with carry propagating into angle_ship_to_pod.
-    const fracPlusEight = pod.angleFrac + 8;
+    // angleFrac accumulates floating-point angularVelocity for sub-step
+    // precision, but the tether calculation must use a clean integer byte
+    // so that carry and top-nibble are consistent (matching the original
+    // 8-bit register behaviour).
+    const frac = Math.round(pod.angleFrac) & BYTE_MASK;
+    const fracPlusEight = frac + 8;
     const carry = fracPlusEight > 0xFF ? 1 : 0;
     const topNibble = fracPlusEight & HIGH_NIBBLE_MASK;
     let y = (pod.angleShipToPod + carry) & ANGLE_MASK;
