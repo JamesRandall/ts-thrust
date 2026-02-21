@@ -6,7 +6,7 @@ import podStandPng from "./sprites/pod_stand.png";
 import podPng from "./sprites/pod.png";
 import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
-import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, startTeleport, MESSAGE_DURATION, destroyPlayerShip, destroyAttachedPod} from "./game";
+import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, addScore, startTeleport, MESSAGE_DURATION, destroyPlayerShip, destroyAttachedPod} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCollision, testRectCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
@@ -510,7 +510,7 @@ async function startGame() {
       game.destroyedTurrets.add(idx);
       const t = game.level.turrets[idx];
       spawnExplosion(game.explosions, t.x + 2, t.y + 4, bbcMicroColours.yellow);
-      game.score += 750;
+      addScore(game, 750);
       sounds.playExplosion();
     }
     // Fuel explosions: type 1 ($FF) = both landscape + object colours combined
@@ -519,7 +519,7 @@ async function startGame() {
       game.destroyedFuel.add(idx);
       const f = game.level.fuel[idx];
       spawnExplosion(game.explosions, f.x + 2, f.y + 4, fuelExplosionColour);
-      game.score += 150;
+      addScore(game, 150);
       sounds.playExplosion();
     }
     // Generator hit

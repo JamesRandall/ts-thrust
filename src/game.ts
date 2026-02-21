@@ -537,14 +537,20 @@ export function advanceToNextLevel(state: GameState): GameState {
   });
 }
 
+/** Add points and award extra lives for each 10,000-point boundary crossed. */
+export function addScore(state: GameState, points: number): void {
+  const oldThousands = Math.floor(state.score / 10000);
+  state.score += points;
+  const newThousands = Math.floor(state.score / 10000);
+  state.lives += (newThousands - oldThousands);
+}
+
 /** Apply mission complete bonus scoring and extra lives. */
 export function missionComplete(state: GameState): void {
   state.missionNumber++;
   let loopCount = state.levelNumber + 5;
   if (state.generator.planetCountdown >= 0) loopCount += 5;
-  const bonus = loopCount * 400;
-  const oldThousands = Math.floor(state.score / 1000);
-  state.score += bonus;
-  const newThousands = Math.floor(state.score / 1000);
-  state.lives += (newThousands - oldThousands);
+  for (let i = 0; i < loopCount; i++) {
+    addScore(state, 400);
+  }
 }

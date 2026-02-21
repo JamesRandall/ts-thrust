@@ -1,5 +1,5 @@
 import { Level } from "./levels";
-import { GameState } from "./game";
+import { GameState, addScore } from "./game";
 
 // Fuel collection constants
 const FUEL_PICKUP_RANGE_X = 6;
@@ -63,7 +63,7 @@ export function tickFuelCollection(
 
     if (state.tractorCounters[i] >= FUEL_TRACTOR_THRESHOLD) {
       destroyedFuel.add(i);
-      game.score += FUEL_SCORE;
+      addScore(game, FUEL_SCORE);
       state.collectedThisTick = true;
     }
 
