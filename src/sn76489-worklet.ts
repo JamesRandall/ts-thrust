@@ -58,10 +58,13 @@ class SN76489 {
       if (isVolume) {
         this.vol[channel] = volumeTable[value & 0x0f];
       } else if (channel === 3) {
-        // Noise control register — low 3 bits
-        this.period[3] = value & 0x07;
+        // Noise control register — low 3 bits; reset LFSR only when value changes
+        const newCtrl = value & 0x07;
+        if (newCtrl !== this.period[3]) {
+          this.lfsr = 0x4000;
+        }
+        this.period[3] = newCtrl;
         this.updateNoisePeriod();
-        this.lfsr = 0x4000; // reset LFSR on noise register write
       } else {
         // Tone: set low 4 bits, keep upper 6
         this.period[channel] = (this.period[channel] & 0x3f0) | (value & 0x0f);
@@ -75,9 +78,12 @@ class SN76489 {
       if (isVolume) {
         this.vol[channel] = volumeTable[value & 0x0f];
       } else if (channel === 3) {
-        this.period[3] = value & 0x07;
+        const newCtrl = value & 0x07;
+        if (newCtrl !== this.period[3]) {
+          this.lfsr = 0x4000;
+        }
+        this.period[3] = newCtrl;
         this.updateNoisePeriod();
-        this.lfsr = 0x4000;
       } else {
         // Tone: set upper 6 bits, keep low 4
         this.period[channel] = ((value & 0x3f) << 4) | (this.period[channel] & 0x0f);
@@ -225,6 +231,7 @@ class MOSSoundSystem {
     if (flush) {
       ch.flushBuffer();
       ch.bufCount = 0;
+      ch.duration = 0; // interrupt current sound so new one starts next tick
     }
 
     // Encode 3-byte buffer entry
