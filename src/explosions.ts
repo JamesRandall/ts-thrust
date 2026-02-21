@@ -22,8 +22,8 @@ function randomByte(): number {
   return Math.floor(Math.random() * 256);
 }
 
-export function spawnExplosion(state: ExplosionState, worldX: number, worldY: number, color: string): void {
-  let explosionAngle = randomByte() & 0x1F; // random starting angle 0–31
+export function spawnExplosion(state: ExplosionState, worldX: number, worldY: number, color: string, startAngle?: number): void {
+  let explosionAngle = startAngle !== undefined ? (startAngle & 0x1F) : (randomByte() & 0x1F);
 
   for (let p = 0; p < 8; p++) {
     const rndA = randomByte();

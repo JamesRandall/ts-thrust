@@ -2,9 +2,9 @@ import { Level, levels } from "./levels";
 import { ThrustPhysics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
-import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
+import { WORLD_SCALE_X, WORLD_SCALE_Y, bbcMicroColours } from "./rendering";
 import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
-import { ExplosionState, createExplosionState, tickExplosions } from "./explosions";
+import { ExplosionState, createExplosionState, tickExplosions, spawnExplosion } from "./explosions";
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
 import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 import { StarFieldState, createStarFieldState, tickStarField, seedStarField } from "./stars";
@@ -29,6 +29,20 @@ const ORBIT_ESCAPE_Y = 288;
 
 // Duration of message overlay in game ticks (~2 seconds at 33 Hz)
 export const MESSAGE_DURATION = 66;
+
+// Death sequence constants
+const DEATH_TIMER_INITIAL = 0x3C;       // 60 ticks
+const DEATH_BACKGROUND_BLACK_AT = 0x28; // 40 — timer value when background darkens
+const TETHER_RETRACT_RATE = 2;          // top_nibble_index decremented by 2 per tick
+const SHIP_EXPLOSION_X_OFFSET = 4 / WORLD_SCALE_X; // +4 screen pixels → world units
+const SHIP_EXPLOSION_Y_OFFSET = 5 / WORLD_SCALE_Y; // +5 screen pixels → world units
+const SHIP_EXPLOSION_ANGLE = 0x01;      // fixed starting angle (not random)
+
+export interface DeathSequence {
+  timer: number;              // Starts at 60, decrements each tick to 0
+  shipDestroyed: boolean;     // Ship has been destroyed (explosion spawned)
+  backgroundDarkened: boolean; // Background palette set to black at timer == 40
+}
 
 export interface TeleportAnimation {
   isDisappearing: boolean;  // true = orbit escape, false = level start/retry
@@ -81,6 +95,9 @@ export interface GameState {
   pendingAction: PendingAction;
   teleport: TeleportAnimation | null;
   gameOver: boolean;
+  deathSequence: DeathSequence | null;
+  oldShipX: number;
+  oldShipY: number;
 }
 
 export function createGame(
@@ -143,6 +160,9 @@ export function createGame(
     pendingAction: null,
     teleport: null,
     gameOver: false,
+    deathSequence: null,
+    oldShipX: level.startingPosition.x,
+    oldShipY: level.startingPosition.y,
   };
   startTeleport(state, false);
   return state;
@@ -175,6 +195,75 @@ export function startTeleport(state: GameState, isDisappearing: boolean): void {
   };
 }
 
+/** Destroy the player's ship — spawns explosion at old position, starts/resets death timer. */
+export function destroyPlayerShip(state: GameState): void {
+  if (state.deathSequence?.shipDestroyed) return; // guard: only trigger once
+
+  if (!state.deathSequence) {
+    state.deathSequence = { timer: DEATH_TIMER_INITIAL, shipDestroyed: false, backgroundDarkened: false };
+  }
+  state.deathSequence.timer = DEATH_TIMER_INITIAL;
+  state.deathSequence.shipDestroyed = true;
+
+  spawnExplosion(
+    state.explosions,
+    state.oldShipX + SHIP_EXPLOSION_X_OFFSET,
+    state.oldShipY + SHIP_EXPLOSION_Y_OFFSET,
+    bbcMicroColours.white,
+    SHIP_EXPLOSION_ANGLE,
+  );
+}
+
+/** Destroy the attached pod — detaches, spawns explosion at pod position, resets death timer. */
+export function destroyAttachedPod(state: GameState): void {
+  if (!state.physics.state.podAttached) return;
+
+  if (!state.deathSequence) {
+    state.deathSequence = { timer: DEATH_TIMER_INITIAL, shipDestroyed: false, backgroundDarkened: false };
+  }
+  state.deathSequence.timer = DEATH_TIMER_INITIAL; // reset timer (key spec behaviour)
+
+  const podX = state.physics.state.podX;
+  const podY = state.physics.state.podY;
+  state.physics.detachPod();
+
+  spawnExplosion(
+    state.explosions,
+    podX,
+    podY,
+    bbcMicroColours.white,
+    SHIP_EXPLOSION_ANGLE,
+  );
+}
+
+/** Per-tick death countdown: retract tether, trigger secondary destruction, end level at 0. */
+function tickDeathSequence(state: GameState): void {
+  const ds = state.deathSequence!;
+
+  ds.timer--;
+
+  if (ds.timer <= 0) {
+    state.levelEndedFlag = true;
+    return;
+  }
+
+  if (!ds.backgroundDarkened && ds.timer === DEATH_BACKGROUND_BLACK_AT) {
+    ds.backgroundDarkened = true;
+  }
+
+  // Tether retraction (every tick during countdown)
+  state.physics.state.pod.tetherIndex -= TETHER_RETRACT_RATE;
+
+  if (state.physics.state.pod.tetherIndex < 0) {
+    // Secondary destruction: whichever hasn't been destroyed yet
+    if (!ds.shipDestroyed) {
+      destroyPlayerShip(state);
+    } else if (state.physics.state.podAttached) {
+      destroyAttachedPod(state);
+    }
+  }
+}
+
 /** Approximate Manhattan-weighted distance matching the original 6502 routine. */
 function tractorDistance(
     shipSX: number, shipSY: number,
@@ -190,14 +279,20 @@ function tractorDistance(
 }
 
 export function tick(state: GameState, dt: number, keys: Set<string>): void {
-  // Read raw key state
-  const spacebarDown = keys.has("Space");
-  const thrustDown = keys.has("KeyW");
+  const dying = state.deathSequence !== null;
 
-  // Gate physics input on fuel
+  // Read raw key state — blocked during death sequence
+  const spacebarDown = !dying && keys.has("Space");
+  const thrustDown = !dying && keys.has("KeyW");
+
+  // Save old position for death explosion origin (before physics update)
+  state.oldShipX = state.player.x;
+  state.oldShipY = state.player.y;
+
+  // Gate physics input on fuel AND death
   const input: ThrustInput = {
     thrust: thrustDown && !state.fuelEmpty,
-    rotate: keys.has("KeyA") ? -1 : keys.has("KeyD") ? 1 : 0,
+    rotate: dying ? 0 : (keys.has("KeyA") ? -1 : keys.has("KeyD") ? 1 : 0),
     shield: spacebarDown && !state.fuelEmpty,
   };
 
@@ -238,6 +333,11 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
     // Shield active flickers with the gate (2-on/2-off)
     state.shieldActive = spacebarDown && !state.fuelEmpty && shieldGate;
 
+    // Death sequence countdown (runs each game tick)
+    if (dying) {
+      tickDeathSequence(state);
+    }
+
     updateScroll(
         { x: state.player.x, y: state.player.y },
         { x: state.physics.state.forceX, y: state.physics.state.forceY },
@@ -262,7 +362,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
 
     tickPlayerShooting(
         state.playerShooting,
-        keys.has("Enter"),
+        !dying && keys.has("Enter"),
         state.shieldActive,
         state.physics.state.angle,
         state.player.x,
@@ -338,8 +438,8 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
       }
     }
 
-    // Orbit escape detection
-    if (state.physics.state.y < ORBIT_ESCAPE_Y && !state.levelEndedFlag) {
+    // Orbit escape detection — blocked during death
+    if (!dying && state.physics.state.y < ORBIT_ESCAPE_Y && !state.levelEndedFlag) {
       state.escapedToOrbit = true;
     }
   }
@@ -409,6 +509,9 @@ export function retryLevel(state: GameState): void {
   state.messageTimer = 0;
   state.pendingAction = null;
   state.teleport = null;
+  state.deathSequence = null;
+  state.oldShipX = state.level.startingPosition.x;
+  state.oldShipY = state.level.startingPosition.y;
   startTeleport(state, false);
 }
 

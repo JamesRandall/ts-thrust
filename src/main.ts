@@ -6,7 +6,7 @@ import podStandPng from "./sprites/pod_stand.png";
 import podPng from "./sprites/pod.png";
 import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
-import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, startTeleport, MESSAGE_DURATION} from "./game";
+import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, startTeleport, MESSAGE_DURATION, destroyPlayerShip, destroyAttachedPod} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCollision, testRectCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
@@ -14,6 +14,7 @@ import {renderFuelBeams} from "./fuelCollection";
 import {handleGeneratorHit} from "./generator";
 import {renderStars} from "./stars";
 import {bbcMicroColours} from "./rendering";
+import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScreen} from "./titleScreen";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -44,9 +45,12 @@ const keys = new Set<string>();
 window.addEventListener("keydown", (e) => { keys.add(e.code); e.preventDefault(); });
 window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 
+const title = createTitleScreen();
+
 let lastTime = -1;
 let fps = 0;
 let showFps = false;
+let paused = false;
 
 // Teleport animation constants
 const TELEPORT_FRAME_DURATION = 1 / 25;  // 40ms per step (half speed)
@@ -102,11 +106,16 @@ async function startGame() {
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
 
+    // Hide ship when destroyed in death sequence
+    const shouldHideShip = hideShip || game.deathSequence?.shipDestroyed;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    renderStars(ctx, game.starField, camX, camY);
+    if (!title.active) {
+      renderStars(ctx, game.starField, camX, camY);
+    }
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, hideShip);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, shouldHideShip);
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
@@ -192,14 +201,32 @@ async function startGame() {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
 
+    // Title screen — show terrain with text overlay, no ship
+    if (title.active) {
+      updateTitleScreen(title, dt);
+      renderScene(true);
+      renderTitleScreen(ctx, title, INTERNAL_W);
+
+      if (keys.size > 0) {
+        keys.clear();
+        title.active = false;
+        startTeleport(game, false);
+      }
+
+      requestAnimationFrame(frame);
+      return;
+    }
+
     // Game over state — wait for any key to restart
     if (game.gameOver) {
-      renderScene();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
       drawCenteredMessage("GAME OVER");
 
       // Check for any key to restart
       if (keys.size > 0) {
         keys.clear();
+        resetTitleScreen(title);
         game = createGame(levels[0], 0);
       }
 
@@ -207,10 +234,11 @@ async function startGame() {
       return;
     }
 
-    // Message overlay — freeze scene and show text
+    // Message overlay — black screen with status bar and text
     if (game.messageTimer > 0) {
       game.messageTimer--;
-      renderScene();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
       if (game.messageText) {
         drawCenteredMessage(game.messageText);
       }
@@ -300,6 +328,20 @@ async function startGame() {
       return;
     }
 
+    // Pause toggle
+    if (keys.has("KeyP")) {
+      paused = !paused;
+      keys.delete("KeyP");
+    }
+
+    if (paused) {
+      renderScene();
+      drawCenteredMessage("PAUSED");
+
+      requestAnimationFrame(frame);
+      return;
+    }
+
     // Number keys switch level (debug)
     for (let i = 0; i < levels.length; i++) {
       if (keys.has(`Digit${i + 1}`)) {
@@ -354,45 +396,50 @@ async function startGame() {
     const shipScreenX = Math.round(game.player.x * WORLD_SCALE_X - camX - center.x);
     const shipScreenY = Math.round(game.player.y * WORLD_SCALE_Y - camY - center.y);
 
-    const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
-    game.collisionResult = collision;
+    // --- Collision detection — skip during death sequence ---
+    if (!game.deathSequence) {
+      const collision = testCollision(collisionBuf, shipMasks[spriteIdx], shipScreenX, shipScreenY);
+      game.collisionResult = collision;
 
-    // --- Collision death detection (set levelEndedFlag instead of immediate reset) ---
-    if (collision !== CollisionResult.None) {
-      game.levelEndedFlag = true;
-    }
-
-    // Tether line + pod collision with terrain (only when pod is attached, not during tractor beam)
-    if (collision === CollisionResult.None && game.physics.state.podAttached) {
-      const shipCX = Math.round(game.player.x * WORLD_SCALE_X - camX);
-      const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
-      const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
-      const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
-
-      // Test tether line
-      if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
-        game.levelEndedFlag = true;
+      // Ship collision → destroy ship (ship dies first)
+      if (collision !== CollisionResult.None) {
+        destroyPlayerShip(game);
       }
-      // Test pod sprite area
-      else {
-        const podLeft = podCX - Math.floor(podSprite.width / 2);
-        const podTop = podCY - Math.floor(podSprite.height / 2);
-        if (testRectCollision(collisionImageData, podLeft, podTop, podSprite.width, podSprite.height)) {
-          game.levelEndedFlag = true;
+
+      // Tether line + pod collision with terrain (only when pod is attached, not during tractor beam)
+      if (collision === CollisionResult.None && game.physics.state.podAttached) {
+        const shipCX = Math.round(game.player.x * WORLD_SCALE_X - camX);
+        const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
+        const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
+        const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+
+        // Test tether line
+        if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
+          destroyAttachedPod(game);
+        }
+        // Test pod sprite area
+        else {
+          const podLeft = podCX - Math.floor(podSprite.width / 2);
+          const podTop = podCY - Math.floor(podSprite.height / 2);
+          if (testRectCollision(collisionImageData, podLeft, podTop, podSprite.width, podSprite.height)) {
+            destroyAttachedPod(game);
+          }
         }
       }
-    }
 
-    // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
-    const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
-    if (bulletHitShip && !game.shieldActive) {
-      game.levelEndedFlag = true;
+      // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
+      const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
+      if (bulletHitShip && !game.shieldActive) {
+        destroyPlayerShip(game);
+      }
     }
 
     // Planet self-destruct countdown reached 0
     if (game.planetKilled) {
       game.planetKilled = false;
-      game.levelEndedFlag = true;
+      if (!game.deathSequence) {
+        destroyPlayerShip(game);
+      }
     }
 
     // --- Process orbit escape — start disappear teleport ---
