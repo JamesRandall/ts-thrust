@@ -100,16 +100,24 @@ export interface GameState {
   deathSequence: DeathSequence | null;
   oldShipX: number;
   oldShipY: number;
+  reverseGravity: boolean;
+  invisibleLandscape: boolean;
 }
 
 export function createGame(
   level: Level,
   levelNumber: number = 0,
-  persistent?: { lives: number; score: number; missionNumber: number },
+  persistent?: { lives: number; score: number; missionNumber: number; reverseGravity?: boolean; invisibleLandscape?: boolean },
 ): GameState {
+  const reverseGravity = persistent?.reverseGravity ?? false;
+  const invisibleLandscape = persistent?.invisibleLandscape ?? false;
+  const startAngle = reverseGravity ? 16 : 0;
+
   const physics = new ThrustPhysics({
     x: level.startingPosition.x,
     y: level.startingPosition.y,
+    angle: startAngle,
+    reverseGravity,
   });
 
   const scrollConfig = createScrollConfig(VIEWPORT_W, VIEWPORT_H, STATUS_BAR_H);
@@ -130,7 +138,7 @@ export function createGame(
     player: {
       x: level.startingPosition.x,
       y: level.startingPosition.y,
-      rotation: 0,
+      rotation: (startAngle / 32) * Math.PI * 2,
     },
     fuel: 1000,
     lives: persistent?.lives ?? 3,
@@ -166,6 +174,8 @@ export function createGame(
     deathSequence: null,
     oldShipX: level.startingPosition.x,
     oldShipY: level.startingPosition.y,
+    reverseGravity,
+    invisibleLandscape,
   };
   startTeleport(state, false);
   return state;
@@ -467,14 +477,15 @@ export function retryLevel(state: GameState): void {
   // Detach pod first if attached
   state.physics.detachPod();
 
+  const startAngle = state.reverseGravity ? 16 : 0;
   state.player.x = state.level.startingPosition.x;
   state.player.y = state.level.startingPosition.y;
-  state.player.rotation = 0;
+  state.player.rotation = (startAngle / 32) * Math.PI * 2;
   state.physics.state.x = state.level.startingPosition.x;
   state.physics.state.y = state.level.startingPosition.y;
   state.physics.state.shipX = state.level.startingPosition.x;
   state.physics.state.shipY = state.level.startingPosition.y;
-  state.physics.state.angle = 0;
+  state.physics.state.angle = startAngle;
   state.physics.resetMotion();
   state.collisionResult = CollisionResult.None;
 
@@ -533,14 +544,38 @@ export function triggerMessage(
   state.pendingAction = action;
 }
 
-/** Advance to next level, preserving persistent state. */
+/** Advance to next level, preserving persistent state. Toggles cycling modifiers on wrap. */
 export function advanceToNextLevel(state: GameState): GameState {
   const nextLevelNumber = (state.levelNumber + 1) % levels.length;
-  return createGame(levels[nextLevelNumber], nextLevelNumber, {
+
+  let reverseGravity = state.reverseGravity;
+  let invisibleLandscape = state.invisibleLandscape;
+
+  // Level cycling: toggle modifiers when wrapping from level 5 back to 0
+  if (nextLevelNumber === 0 && state.levelNumber === levels.length - 1) {
+    reverseGravity = !reverseGravity;
+    if (!reverseGravity) {
+      // Reverse gravity just turned OFF → toggle invisible landscape
+      invisibleLandscape = !invisibleLandscape;
+    }
+  }
+
+  const newState = createGame(levels[nextLevelNumber], nextLevelNumber, {
     lives: state.lives,
     score: state.score,
     missionNumber: state.missionNumber,
+    reverseGravity,
+    invisibleLandscape,
   });
+
+  // Show modifier message on first activation of each cycle
+  if (reverseGravity && !state.reverseGravity) {
+    triggerMessage(newState, "REVERSE GRAVITY", null);
+  } else if (invisibleLandscape && !state.invisibleLandscape) {
+    triggerMessage(newState, "INVISIBLE LANDSCAPE", null);
+  }
+
+  return newState;
 }
 
 /** Add points and award extra lives for each 10,000-point boundary crossed. */

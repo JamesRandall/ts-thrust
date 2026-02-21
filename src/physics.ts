@@ -204,6 +204,9 @@ export interface ThrustState {
 
   /** Current level (0-based, 0-5) — controls gravity */
   level: number;
+
+  /** When true, gravity pulls upward instead of downward */
+  reverseGravity: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +254,7 @@ export class ThrustPhysics {
       podX: 0,
       podY: 0,
       level: 0,
+      reverseGravity: false,
       ...initialState,
     };
   }
@@ -261,7 +265,12 @@ export class ThrustPhysics {
 
   private get gravity(): number {
     const idx = Math.min(this.state.level, LEVEL_GRAVITY_FRAC.length - 1);
-    return LEVEL_GRAVITY_FRAC[idx] / 256;
+    const gravFrac = LEVEL_GRAVITY_FRAC[idx];
+    if (this.state.reverseGravity) {
+      // Ones complement + INT=$FF: small negative value (pulls upward)
+      return q78ToFloat(0xFF, gravFrac ^ 0xFF);
+    }
+    return gravFrac / 256;
   }
 
   private get massShift(): number {

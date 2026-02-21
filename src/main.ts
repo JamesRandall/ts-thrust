@@ -127,13 +127,21 @@ async function startGame() {
 
   const sounds = await ThrustSounds.create();
 
-  function renderScene(hideShip?: boolean) {
+  function renderScene(hideShip?: boolean, landscapeRevealed?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
 
     // Hide ship when destroyed in death sequence
     const shouldHideShip = hideShip || game.deathSequence?.shipDestroyed;
+
+    // Invisible landscape: terrain is black unless shield reveals it
+    const landscapeHidden = game.invisibleLandscape && !landscapeRevealed;
+    const effectiveTerrainColor = landscapeHidden ? bbcMicroColours.black : game.level.terrainColor;
+    // Tether and bullets use white on invisible levels (always visible)
+    const lineColor = game.invisibleLandscape ? bbcMicroColours.white : game.level.terrainColor;
+    // Build effective level with overridden terrain color for rendering
+    const effectiveLevel = landscapeHidden ? { ...game.level, terrainColor: bbcMicroColours.black } : game.level;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -142,10 +150,10 @@ async function startGame() {
     }
 
     const doorPoly = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, shouldHideShip, doorPoly, switchSprites);
+    renderLevel(ctx, effectiveLevel, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, shouldHideShip, doorPoly, switchSprites);
 
-    renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
-    renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
+    renderBullets(ctx, game.turretFiring.bullets, camX, camY, lineColor);
+    renderPlayerBullets(ctx, game.playerShooting, camX, camY, lineColor);
     renderExplosions(ctx, game.explosions, camX, camY);
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
@@ -168,7 +176,7 @@ async function startGame() {
         podCY = Math.round(game.level.podPedestal.y * WORLD_SCALE_Y - camY - 1 + Math.floor(podSprite.height / 2));
       }
 
-      ctx.fillStyle = game.level.terrainColor;
+      ctx.fillStyle = lineColor;
       {
         let x0 = shipCX, y0 = shipCY, x1 = podCX, y1 = podCY;
         const dx = Math.abs(x1 - x0);
@@ -186,7 +194,7 @@ async function startGame() {
       }
 
       if (game.physics.state.podAttached) {
-        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, game.level.terrainColor);
+        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, effectiveTerrainColor);
       }
     }
 
@@ -455,6 +463,24 @@ async function startGame() {
       }
     }
 
+    // 0 key advances to next cycle (debug) — stay on same level, toggle modifiers
+    if (keys.has("Digit0")) {
+      sounds.stopAll();
+      let reverseGravity = !game.reverseGravity;
+      let invisibleLandscape = game.invisibleLandscape;
+      if (!reverseGravity) {
+        invisibleLandscape = !invisibleLandscape;
+      }
+      game = createGame(levels[game.levelNumber], game.levelNumber, {
+        lives: game.lives,
+        score: game.score,
+        missionNumber: game.missionNumber,
+        reverseGravity,
+        invisibleLandscape,
+      });
+      keys.delete("Digit0");
+    }
+
     tick(game, dt, keys);
     sounds.tick();
 
@@ -618,8 +644,8 @@ async function startGame() {
       }
     }
 
-    // Render visible frame
-    renderScene();
+    // Render visible frame — shield key reveals invisible landscape
+    renderScene(false, shieldKeyDown);
 
     // FPS counter (toggle with F)
     if (keys.has("KeyF")) {
