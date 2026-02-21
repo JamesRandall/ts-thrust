@@ -15,9 +15,11 @@ import {handleGeneratorHit} from "./generator";
 import {renderStars} from "./stars";
 import {bbcMicroColours} from "./rendering";
 import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScreen} from "./titleScreen";
+import {PostProcessor} from "./postProcessing";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
+const ppCanvas = document.getElementById("postprocess") as HTMLCanvasElement;
 
 const INTERNAL_W = 320;
 const INTERNAL_H = 256;
@@ -31,8 +33,12 @@ function resize() {
   const scaleY = Math.floor(window.innerHeight / INTERNAL_H);
   const scale = Math.max(1, Math.min(scaleX, scaleY));
 
-  canvas.style.width = `${INTERNAL_W * scale}px`;
-  canvas.style.height = `${INTERNAL_H * scale}px`;
+  const w = `${INTERNAL_W * scale}px`;
+  const h = `${INTERNAL_H * scale}px`;
+  canvas.style.width = w;
+  canvas.style.height = h;
+  ppCanvas.style.width = w;
+  ppCanvas.style.height = h;
 }
 
 window.addEventListener("resize", resize);
@@ -51,6 +57,8 @@ let lastTime = -1;
 let fps = 0;
 let showFps = false;
 let paused = false;
+
+const postProcessor = new PostProcessor(canvas, ppCanvas, INTERNAL_W, INTERNAL_H);
 
 // Teleport animation constants
 const TELEPORT_FRAME_DURATION = 1 / 25;  // 40ms per step (half speed)
@@ -91,6 +99,9 @@ function drawTeleportEffect(
 }
 
 async function startGame() {
+  // Init WebGPU post-processing (non-blocking — gracefully degrades if unavailable)
+  const ppReady = await postProcessor.init().catch(() => false);
+
   const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite, podSprite] = await Promise.all([
     loadShipSprites(),
     loadSprite(fuelPng),
@@ -197,9 +208,25 @@ async function startGame() {
     }
   }
 
+  function handlePostProcessKeys() {
+    if (ppReady && keys.has("BracketRight")) {
+      postProcessor.cycleEffect(1);
+      keys.delete("BracketRight");
+    }
+    if (ppReady && keys.has("BracketLeft")) {
+      postProcessor.cycleEffect(-1);
+      keys.delete("BracketLeft");
+    }
+  }
+
+  function postProcessFrame(time: number) {
+    postProcessor.render(time);
+  }
+
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
+    handlePostProcessKeys();
 
     // Title screen — show terrain with text overlay, no ship
     if (title.active) {
@@ -213,6 +240,7 @@ async function startGame() {
         startTeleport(game, false);
       }
 
+      postProcessFrame(time);
       requestAnimationFrame(frame);
       return;
     }
@@ -230,6 +258,7 @@ async function startGame() {
         game = createGame(levels[0], 0);
       }
 
+      postProcessFrame(time);
       requestAnimationFrame(frame);
       return;
     }
@@ -272,6 +301,7 @@ async function startGame() {
         drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
       }
 
+      postProcessFrame(time);
       requestAnimationFrame(frame);
       return;
     }
@@ -324,6 +354,7 @@ async function startGame() {
         drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
       }
 
+      postProcessFrame(time);
       requestAnimationFrame(frame);
       return;
     }
@@ -338,6 +369,7 @@ async function startGame() {
       renderScene();
       drawCenteredMessage("PAUSED");
 
+      postProcessFrame(time);
       requestAnimationFrame(frame);
       return;
     }
@@ -481,6 +513,7 @@ async function startGame() {
       drawText(ctx, fpsText, 1, INTERNAL_H - 6, "#ffffff");
     }
 
+    postProcessFrame(time);
     requestAnimationFrame(frame);
   }
 

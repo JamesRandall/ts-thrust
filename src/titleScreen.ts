@@ -25,7 +25,7 @@ const titlePages: TitleEntry[][] = [
     { row: 8, text: "Rotate right: {D}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
     { row: 9, text: "Fire: {RETURN}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
     { row: 10, text: "Shield / Tractor beam: {SPACE}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
-    { row: 11, text: "Cycle effects: {[ ]}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
+    { row: 11, text: "Cycle CRT effects: {[ ]}", color: bbcMicroColours.red, color2: bbcMicroColours.yellow },
 
     { row: 13, text: "Original game copyright", color: bbcMicroColours.magenta },
     { row: 14, text: "{Jeremy C Smith} 1986", color: bbcMicroColours.magenta, color2: bbcMicroColours.yellow },
