@@ -525,6 +525,7 @@ async function startGame() {
     // Generator hit
     if (bulletHits.hitGenerator && !game.generator.destroyed) {
       handleGeneratorHit(game.generator, game.explosions, bulletHits.generatorHitX, bulletHits.generatorHitY);
+      sounds.playExplosion();
     }
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);

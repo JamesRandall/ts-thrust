@@ -43,6 +43,9 @@ export function tickGenerator(
     if (state.rechargeCounter > 0) {
       state.rechargeCounter--;
     }
+    if (state.rechargeIncrease > 0) {
+      state.rechargeIncrease--;
+    }
   }
 
   // Planet countdown
@@ -148,7 +151,7 @@ export function handleGeneratorHit(
     }
     state.rechargeIncrease = newRecharge & 0xFF;
   } else {
-    // No overflow — stun turrets, accumulate damage, generator stays
+    // No overflow — stun turrets, accumulate damage
     state.rechargeCounter = newRecharge;
     state.rechargeIncrease = newRecharge;
   }
