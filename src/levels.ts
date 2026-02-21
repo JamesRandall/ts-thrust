@@ -4,6 +4,18 @@ export type Polygon = Array<number>;
 export type ObjectPosition = { x: number, y: number}
 export type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';
 export type TurretPosition = ObjectPosition & { direction: TurretDirection; gunParam: number };
+export type SwitchDirection = 'left' | 'right';
+export type SwitchPosition = ObjectPosition & { direction: SwitchDirection };
+export type DoorType = 'slide' | 'step' | 'chevron';
+export type DoorConfig = {
+    type: DoorType;
+    worldY: number;
+    threshold: number;
+    scanlines: number;
+    closedX: number;
+    openX: number;
+    innerX: number;
+};
 
 export type Level = {
     name: string;
@@ -15,6 +27,8 @@ export type Level = {
     powerPlant: ObjectPosition;
     podPedestal: ObjectPosition;
     fuel: ObjectPosition[];
+    switches: SwitchPosition[];
+    doorConfig: DoorConfig | null;
 }
 
 export const levels: Level[] = [
@@ -43,6 +57,8 @@ export const levels: Level[] = [
         fuel: [
             { x: 110, y: 435 },
         ],
+        switches: [],
+        doorConfig: null,
     },
     {
         name: "Level 1",
@@ -72,6 +88,8 @@ export const levels: Level[] = [
         fuel: [
             { x: 139, y: 571 },
         ],
+        switches: [],
+        doorConfig: null,
     },
     {
         name: "Level 2",
@@ -111,6 +129,8 @@ export const levels: Level[] = [
             { x: 125, y: 606 },
             { x: 103, y: 657 },
         ],
+        switches: [],
+        doorConfig: null,
     },
     {
         name: "Level 3",
@@ -148,6 +168,11 @@ export const levels: Level[] = [
         fuel: [
             { x: 146, y: 599 },
         ],
+        switches: [
+            { x: 172, y: 593, direction: 'left' },
+            { x: 172, y: 647, direction: 'left' },
+        ],
+        doorConfig: { type: 'slide', worldY: 617, threshold: 16, scanlines: 13, closedX: 174, openX: 158, innerX: 156 },
     },
     {
         name: "Level 4",
@@ -197,6 +222,11 @@ export const levels: Level[] = [
             { x: 137, y: 821 },
             { x: 143, y: 821 },
         ],
+        switches: [
+            { x: 164, y: 805, direction: 'left' },
+            { x: 152, y: 885, direction: 'right' },
+        ],
+        doorConfig: { type: 'step', worldY: 835, threshold: 21, scanlines: 21, closedX: 166, openX: 152, innerX: 152 },
     },
     {
         name: "Level 5",
@@ -244,5 +274,10 @@ export const levels: Level[] = [
             { x: 154, y: 760 },
             { x: 193, y: 599 },
         ],
+        switches: [
+            { x: 161, y: 920, direction: 'right' },
+            { x: 190, y: 861, direction: 'left' },
+        ],
+        doorConfig: { type: 'chevron', worldY: 880, threshold: 18, scanlines: 15, closedX: 192, openX: 174, innerX: 174 },
     },
 ];

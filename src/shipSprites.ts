@@ -35,6 +35,8 @@ import gunUpLeft from './sprites/gun_up_left.png'
 import gunUpRight from './sprites/gun_up_right.png'
 import gunDownLeft from './sprites/gun_down_left.png'
 import gunDownRight from './sprites/gun_down_right.png'
+import switchLeftPng from './sprites/switch_left.png'
+import switchRightPng from './sprites/switch_right.png'
 
 export interface TurretSprites {
   upLeft: ImageBitmap;
@@ -51,6 +53,19 @@ export async function loadTurretSprites(): Promise<TurretSprites> {
     loadSprite(gunDownRight),
   ]);
   return { upLeft, upRight, downLeft, downRight };
+}
+
+export interface SwitchSprites {
+  left: ImageBitmap;
+  right: ImageBitmap;
+}
+
+export async function loadSwitchSprites(): Promise<SwitchSprites> {
+  const [left, right] = await Promise.all([
+    loadSprite(switchLeftPng),
+    loadSprite(switchRightPng),
+  ]);
+  return { left, right };
 }
 
 const spriteUrls: string[] = [

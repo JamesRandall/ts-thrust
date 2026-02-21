@@ -288,6 +288,9 @@ export interface BulletHitResult {
   hitGenerator: boolean;
   generatorHitX: number;
   generatorHitY: number;
+  hitSwitch: boolean;
+  switchHitX: number;
+  switchHitY: number;
 }
 
 export function processPlayerBulletCollisions(
@@ -300,7 +303,7 @@ export function processPlayerBulletCollisions(
   destroyedTurrets: Set<number>,
   destroyedFuel: Set<number>,
 ): BulletHitResult {
-  const result: BulletHitResult = { hitTurrets: [], hitFuel: [], hitGenerator: false, generatorHitX: 0, generatorHitY: 0 };
+  const result: BulletHitResult = { hitTurrets: [], hitFuel: [], hitGenerator: false, generatorHitX: 0, generatorHitY: 0, hitSwitch: false, switchHitX: 0, switchHitY: 0 };
   const { data, width, height } = imageData;
 
   for (const bullet of state.bullets) {
@@ -308,7 +311,7 @@ export function processPlayerBulletCollisions(
     const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
     const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
 
-    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' = 'none';
+    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' = 'none';
 
     for (let px = 0; px < 2 && hitColor === 'none'; px++) {
       for (let py = 0; py < 2 && hitColor === 'none'; py++) {
@@ -321,7 +324,8 @@ export function processPlayerBulletCollisions(
         const b = data[idx + 2];
 
         if (r === 0 && g === 0 && b === 0) continue;
-        if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
+        if (r === 0 && g === 255 && b === 0) { hitColor = 'switch'; }
+        else if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
         else if (r === 255 && g === 0 && b === 255) { hitColor = 'fuel'; }
         else if (r === 0 && g === 255 && b === 255) { hitColor = 'generator'; }
         else { hitColor = 'terrain'; }
@@ -331,7 +335,11 @@ export function processPlayerBulletCollisions(
     if (hitColor === 'none') continue;
     bullet.active = false;
 
-    if (hitColor === 'turret') {
+    if (hitColor === 'switch') {
+      result.hitSwitch = true;
+      result.switchHitX = bullet.x;
+      result.switchHitY = bullet.y;
+    } else if (hitColor === 'turret') {
       // Find nearest non-destroyed turret
       let bestIdx = -1;
       let bestDist = Infinity;

@@ -1,6 +1,6 @@
-import { Level } from "./levels";
+import { Level, SwitchPosition } from "./levels";
 import { fillPolygon, Point, bbcMicroColours, WORLD_SCALE_X, WORLD_SCALE_Y, WORLD_WIDTH } from "./rendering";
-import { SpriteMask, TurretSprites } from "./shipSprites";
+import { SpriteMask, TurretSprites, SwitchSprites } from "./shipSprites";
 
 export enum CollisionResult {
   None       = 0,
@@ -43,6 +43,8 @@ export function renderCollisionBuffer(
   destroyedFuel?: Set<number>,
   generatorDestroyed?: boolean,
   podDetached?: boolean,
+  switchSprites?: SwitchSprites,
+  doorPolygon?: Point[] | null,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -59,6 +61,14 @@ export function renderCollisionBuffer(
         points.push({ x: wx(poly[i]) - camX + offset, y: wy(poly[i + 1]) - camY });
       }
       fillPolygon(ctx, points, TERRAIN_COLLISION_COLOUR, Math.round(camY));
+    }
+  }
+
+  // Door polygon (terrain collision) at wrapping offsets
+  if (doorPolygon) {
+    for (const offset of offsets) {
+      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset, y: p.y }));
+      fillPolygon(ctx, offsetPoints, TERRAIN_COLLISION_COLOUR, Math.round(camY));
     }
   }
 
@@ -124,6 +134,17 @@ export function renderCollisionBuffer(
       ctx.fillRect(sx, sy - 1, w, h);
     } else {
       drawMarker(t.x, t.y, bbcMicroColours.red);
+    }
+  }
+  // Switches: render as green sentinel rectangles (for bullet detection)
+  if (switchSprites) {
+    const switchW = switchSprites.left.width;
+    const switchH = switchSprites.left.height;
+    for (const sw of level.switches) {
+      const sx = Math.round(toScreenX(sw.x));
+      const sy = Math.round(wy(sw.y) - camY);
+      ctx.fillStyle = bbcMicroColours.green;
+      ctx.fillRect(sx, sy - 1, switchW, switchH);
     }
   }
 }
@@ -197,6 +218,9 @@ export function testCollision(
     const b = data[idx + 2];
 
     if (r + g + b === 0) continue;
+
+    // Green (0,255,0) = switch sentinel — ship passes through, no collision
+    if (r === 0 && g === 255 && b === 0) continue;
 
     // Identify what was hit — higher-priority results override lower
     let hit: CollisionResult;

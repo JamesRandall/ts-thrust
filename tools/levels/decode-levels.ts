@@ -29,6 +29,18 @@ type Polygon = Array<number>;
 type ObjectPosition = { x: number; y: number };
 type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';
 type TurretPosition = ObjectPosition & { direction: TurretDirection; gunParam: number };
+type SwitchDirection = 'left' | 'right';
+type SwitchPosition = ObjectPosition & { direction: SwitchDirection };
+type DoorType = 'slide' | 'step' | 'chevron';
+type DoorConfig = {
+    type: DoorType;
+    worldY: number;
+    threshold: number;
+    scanlines: number;
+    closedX: number;
+    openX: number;
+    innerX: number;
+};
 
 type Level = {
     name: string;
@@ -40,6 +52,8 @@ type Level = {
     powerPlant: ObjectPosition;
     podPedestal: ObjectPosition;
     fuel: ObjectPosition[];
+    switches: SwitchPosition[];
+    doorConfig: DoorConfig | null;
 };
 
 // ============================================================================
@@ -58,6 +72,8 @@ const bbcMicroColours: Record<number, string> = {
 const OBJECT_FUEL = 0x4;
 const OBJECT_POD_STAND = 0x5;
 const OBJECT_GENERATOR = 0x6;
+const OBJECT_DOOR_SWITCH_RIGHT = 0x07;
+const OBJECT_DOOR_SWITCH_LEFT = 0x08;
 
 function isGunType(type: number): boolean {
     return type >= 0x0 && type <= 0x3;
@@ -265,6 +281,7 @@ function decodeObjects(levelIndex: number) {
     const obj = objectData[levelIndex];
     const turrets: TurretPosition[] = [];
     const fuel: ObjectPosition[] = [];
+    const switches: SwitchPosition[] = [];
     let powerPlant: ObjectPosition = { x: 0, y: 0 };
     let podPedestal: ObjectPosition = { x: 0, y: 0 };
 
@@ -277,14 +294,22 @@ function decodeObjects(levelIndex: number) {
         else if (type === OBJECT_FUEL) fuel.push(pos);
         else if (type === OBJECT_POD_STAND) podPedestal = pos;
         else if (type === OBJECT_GENERATOR) powerPlant = pos;
+        else if (type === OBJECT_DOOR_SWITCH_LEFT) switches.push({ ...pos, direction: 'left' });
+        else if (type === OBJECT_DOOR_SWITCH_RIGHT) switches.push({ ...pos, direction: 'right' });
     }
 
-    return { turrets, powerPlant, podPedestal, fuel };
+    return { turrets, powerPlant, podPedestal, fuel, switches };
 }
 
 // ============================================================================
 // Main decoder
 // ============================================================================
+
+const doorConfigs: Record<number, DoorConfig> = {
+    3: { type: 'slide', worldY: 617, threshold: 16, scanlines: 13, closedX: 174, openX: 158, innerX: 156 },
+    4: { type: 'step', worldY: 835, threshold: 21, scanlines: 21, closedX: 166, openX: 152, innerX: 152 },
+    5: { type: 'chevron', worldY: 880, threshold: 18, scanlines: 15, closedX: 192, openX: 174, innerX: 174 },
+};
 
 function decodeLevels(): Level[] {
     const levels: Level[] = [];
@@ -323,6 +348,8 @@ function decodeLevels(): Level[] {
             powerPlant: objects.powerPlant,
             podPedestal: objects.podPedestal,
             fuel: objects.fuel,
+            switches: objects.switches,
+            doorConfig: doorConfigs[i] ?? null,
         });
     }
 
@@ -360,6 +387,18 @@ function generateOutput(levels: Level[]): string {
     lines.push(`export type ObjectPosition = { x: number, y: number};`);
     lines.push(`export type TurretDirection = 'up_left' | 'up_right' | 'down_left' | 'down_right';`);
     lines.push(`export type TurretPosition = ObjectPosition & { direction: TurretDirection; gunParam: number };`);
+    lines.push(`export type SwitchDirection = 'left' | 'right';`);
+    lines.push(`export type SwitchPosition = ObjectPosition & { direction: SwitchDirection };`);
+    lines.push(`export type DoorType = 'slide' | 'step' | 'chevron';`);
+    lines.push(`export type DoorConfig = {`);
+    lines.push(`    type: DoorType;`);
+    lines.push(`    worldY: number;`);
+    lines.push(`    threshold: number;`);
+    lines.push(`    scanlines: number;`);
+    lines.push(`    closedX: number;`);
+    lines.push(`    openX: number;`);
+    lines.push(`    innerX: number;`);
+    lines.push(`};`);
     lines.push(``);
     lines.push(`export type Level = {`);
     lines.push(`    name: string;`);
@@ -371,6 +410,8 @@ function generateOutput(levels: Level[]): string {
     lines.push(`    powerPlant: ObjectPosition;`);
     lines.push(`    podPedestal: ObjectPosition;`);
     lines.push(`    fuel: ObjectPosition[];`);
+    lines.push(`    switches: SwitchPosition[];`);
+    lines.push(`    doorConfig: DoorConfig | null;`);
     lines.push(`};`);
     lines.push(``);
     lines.push(`export const bbcMicroColours = {`);
@@ -403,6 +444,13 @@ function generateOutput(levels: Level[]): string {
         lines.push(`        powerPlant: ${formatPosition(level.powerPlant)},`);
         lines.push(`        podPedestal: ${formatPosition(level.podPedestal)},`);
         lines.push(`        fuel: [${level.fuel.map(f => `\n            ${formatPosition(f)}`).join(",")}${level.fuel.length > 0 ? ",\n        " : ""}],`);
+        lines.push(`        switches: [${level.switches.map(s => `\n            { x: ${s.x}, y: ${s.y}, direction: '${s.direction}' }`).join(",")}${level.switches.length > 0 ? ",\n        " : ""}],`);
+        if (level.doorConfig) {
+            const dc = level.doorConfig;
+            lines.push(`        doorConfig: { type: '${dc.type}', worldY: ${dc.worldY}, threshold: ${dc.threshold}, scanlines: ${dc.scanlines}, closedX: ${dc.closedX}, openX: ${dc.openX}, innerX: ${dc.innerX} },`);
+        } else {
+            lines.push(`        doorConfig: null,`);
+        }
         lines.push(`    },`);
     }
 

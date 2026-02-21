@@ -1,5 +1,5 @@
 import {renderLevel, drawStatusBar, drawText, drawRemappedSprite, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
-import {loadShipSprites, loadSprite, loadTurretSprites} from "./shipSprites";
+import {loadShipSprites, loadSprite, loadTurretSprites, loadSwitchSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
 import powerPlantPng from "./sprites/powerPlant.png";
 import podStandPng from "./sprites/pod_stand.png";
@@ -11,6 +11,7 @@ import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCol
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
 import {renderFuelBeams} from "./fuelCollection";
+import {getDoorPolygon, triggerDoor} from "./doors";
 import {handleGeneratorHit} from "./generator";
 import {renderStars} from "./stars";
 import {bbcMicroColours} from "./rendering";
@@ -113,7 +114,7 @@ async function startGame() {
   // Init WebGPU post-processing (non-blocking — gracefully degrades if unavailable)
   const ppReady = await postProcessor.init().catch(() => false);
 
-  const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite, podSprite] = await Promise.all([
+  const [{ sprites: shipSprites, masks: shipMasks, centers: shipCenters }, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, shieldSprite, podSprite, switchSprites] = await Promise.all([
     loadShipSprites(),
     loadSprite(fuelPng),
     loadTurretSprites(),
@@ -121,6 +122,7 @@ async function startGame() {
     loadSprite(podStandPng),
     loadSprite(shieldPng),
     loadSprite(podPng),
+    loadSwitchSprites(),
   ]);
 
   const sounds = await ThrustSounds.create();
@@ -139,7 +141,8 @@ async function startGame() {
       renderStars(ctx, game.starField, camX, camY);
     }
 
-    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, shouldHideShip);
+    const doorPoly = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
+    renderLevel(ctx, game.level, game.player.x, game.player.y, game.player.rotation, shipSprites, shipCenters, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.shieldActive ? shieldSprite : undefined, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, game.generator.visible, podDetached, shouldHideShip, doorPoly, switchSprites);
 
     renderBullets(ctx, game.turretFiring.bullets, camX, camY, game.level.terrainColor);
     renderPlayerBullets(ctx, game.playerShooting, camX, camY, game.level.terrainColor);
@@ -493,7 +496,8 @@ async function startGame() {
     const podDetached = game.physics.state.podAttached;
     // Remove pod stand from collision buffer as soon as tractor beam starts (or pod attached)
     const podRemovedFromCollision = podDetached || game.tractorBeamStarted;
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podRemovedFromCollision);
+    const doorPolyCollision = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podRemovedFromCollision, switchSprites, doorPolyCollision);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
 
     // Remove bullets that hit terrain/objects
@@ -525,6 +529,12 @@ async function startGame() {
     // Generator hit
     if (bulletHits.hitGenerator && !game.generator.destroyed) {
       handleGeneratorHit(game.generator, game.explosions, bulletHits.generatorHitX, bulletHits.generatorHitY);
+      sounds.playExplosion();
+    }
+    // Switch hit — trigger door and spawn debris (no score, switch persists)
+    if (bulletHits.hitSwitch) {
+      triggerDoor(game.doorState);
+      spawnExplosion(game.explosions, bulletHits.switchHitX, bulletHits.switchHitY, bbcMicroColours.yellow);
       sounds.playExplosion();
     }
 

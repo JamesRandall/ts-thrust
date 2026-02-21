@@ -14,9 +14,9 @@ export interface Point {
   y: number;
 }
 
-import { Level, TurretDirection } from "./levels";
+import { Level, TurretDirection, SwitchDirection } from "./levels";
 import { fontData, charIndex, CHAR_W, CHAR_H } from "./font";
-import { TurretSprites, SpriteCenter } from "./shipSprites";
+import { TurretSprites, SpriteCenter, SwitchSprites } from "./shipSprites";
 
 export function fillPolygon(
   ctx: CanvasRenderingContext2D,
@@ -200,6 +200,8 @@ export function renderLevel(
   generatorVisible?: boolean,
   podDetached?: boolean,
   hideShip?: boolean,
+  doorPolygon?: Point[] | null,
+  switchSprites?: SwitchSprites,
 ) {
   // Scale world coordinates to screen space
   const wx = (x: number) => x * WORLD_SCALE_X;
@@ -223,6 +225,14 @@ export function renderLevel(
         points.push({ x: wx(poly[i]) - camX + offset, y: wy(poly[i + 1]) - camY });
       }
       fillPolygon(ctx, points, level.terrainColor, Math.round(camY));
+    }
+  }
+
+  // Draw door polygon (terrain-colored overlay) at wrapping offsets
+  if (doorPolygon) {
+    for (const offset of offsets) {
+      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset, y: p.y }));
+      fillPolygon(ctx, offsetPoints, level.terrainColor, Math.round(camY));
     }
   }
 
@@ -273,6 +283,15 @@ export function renderLevel(
       drawRemappedSprite(ctx, sprite, sx, sy - 1, level.objectColor, level.terrainColor);
     } else {
       drawMarker(t.x, t.y, bbcMicroColours.red);
+    }
+  }
+  // Draw switches
+  if (switchSprites) {
+    for (const sw of level.switches) {
+      const sprite = sw.direction === 'left' ? switchSprites.left : switchSprites.right;
+      const sx = Math.round(toScreenX(sw.x));
+      const sy = Math.round(wy(sw.y) - camY);
+      drawRemappedSprite(ctx, sprite, sx, sy - 1, level.objectColor, level.terrainColor);
     }
   }
 

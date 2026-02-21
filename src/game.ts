@@ -8,6 +8,7 @@ import { ExplosionState, createExplosionState, tickExplosions, spawnExplosion } 
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
 import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 import { StarFieldState, createStarFieldState, tickStarField, seedStarField } from "./stars";
+import { DoorState, createDoorState, tickDoor } from "./doors";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -80,6 +81,7 @@ export interface GameState {
   explosions: ExplosionState;
   fuelCollection: FuelCollectionState;
   generator: GeneratorState;
+  doorState: DoorState;
   starField: StarFieldState;
   planetKilled: boolean;
   tractorBeamStarted: boolean;
@@ -145,6 +147,7 @@ export function createGame(
     explosions: createExplosionState(),
     fuelCollection: createFuelCollectionState(level.fuel.length),
     generator: createGeneratorState(),
+    doorState: createDoorState(),
     starField,
     planetKilled: false,
     tractorBeamStarted: false,
@@ -388,6 +391,8 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
       state.planetKilled = true;
     }
 
+    tickDoor(state.doorState, state.level.doorConfig);
+
     // Pass spacebarDown && !fuelEmpty so tractor-beam fuel pickup isn't interrupted by shield flicker
     tickFuelCollection(
         state.fuelCollection,
@@ -495,6 +500,7 @@ export function retryLevel(state: GameState): void {
   state.explosions.particles = [];
   state.fuelCollection = createFuelCollectionState(state.level.fuel.length);
   state.generator = createGeneratorState();
+  state.doorState = createDoorState();
   state.starField = createStarFieldState();
   seedStarField(state.starField, state.scroll.windowPos.x, state.level.objectColor, state.level.terrainColor);
   state.fuel = 1000;
