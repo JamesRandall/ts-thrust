@@ -52,8 +52,10 @@ export function renderCollisionBuffer(
   const wx = (x: number) => x * WORLD_SCALE_X;
   const wy = (y: number) => y * WORLD_SCALE_Y;
 
-  // Terrain polygons at three offsets to handle wrapping
-  const offsets = [-WORLD_WIDTH, 0, WORLD_WIDTH];
+  // Terrain polygons at three offsets to handle wrapping.
+  // Offsets are dynamic so collision stays correct beyond one world-width.
+  const baseOffset = Math.round(camX / WORLD_WIDTH) * WORLD_WIDTH;
+  const offsets = [baseOffset - WORLD_WIDTH, baseOffset, baseOffset + WORLD_WIDTH];
   for (const offset of offsets) {
     for (const poly of level.polygons) {
       const points: Point[] = [];

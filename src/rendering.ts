@@ -216,8 +216,11 @@ export function renderLevel(
     return sx;
   };
 
-  // Draw terrain polygons at three offsets to handle wrapping
-  const offsets = [-WORLD_WIDTH, 0, WORLD_WIDTH];
+  // Draw terrain polygons at three offsets to handle wrapping.
+  // Offsets are computed dynamically so terrain stays visible even when the
+  // camera has travelled more than one world-width from the origin.
+  const baseOffset = Math.round(camX / WORLD_WIDTH) * WORLD_WIDTH;
+  const offsets = [baseOffset - WORLD_WIDTH, baseOffset, baseOffset + WORLD_WIDTH];
   for (const offset of offsets) {
     for (const poly of level.polygons) {
       const points: Point[] = [];
