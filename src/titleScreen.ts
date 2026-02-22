@@ -1,14 +1,18 @@
 import {drawText, bbcMicroColours} from "./rendering";
 import {ScoreEntry, loadScores, renderScoreboard} from "./scoreboard";
 
+// Number of visible pages (instructions + scoreboard) before demo triggers
+const TITLE_PAGE_COUNT = 2;
+const PAGE_FLIP_INTERVAL = 5;
+
 export interface TitleScreenState {
   active: boolean;
   pageTimer: number;
   page: number;
   scores: ScoreEntry[];
+  /** Set to true when the scoreboard page times out — signals main.ts to start demo */
+  demoRequested: boolean;
 }
-
-const PAGE_FLIP_INTERVAL = 5;
 
 interface TitleEntry {
   row: number;
@@ -38,7 +42,7 @@ const titlePages: TitleEntry[][] = [
 ];
 
 export function createTitleScreen(): TitleScreenState {
-  return { active: true, pageTimer: 0, page: 0, scores: loadScores() };
+  return { active: true, pageTimer: 0, page: 0, scores: loadScores(), demoRequested: false };
 }
 
 export function resetTitleScreen(state: TitleScreenState): void {
@@ -46,13 +50,25 @@ export function resetTitleScreen(state: TitleScreenState): void {
   state.pageTimer = 0;
   state.page = 0;
   state.scores = loadScores();
+  state.demoRequested = false;
 }
 
+/**
+ * Update the title screen timer. Cycles: instructions → scoreboard → demo request.
+ * When the scoreboard page times out, demoRequested is set to true and the
+ * title screen deactivates itself so main.ts can start the demo.
+ */
 export function updateTitleScreen(state: TitleScreenState, dt: number): void {
   state.pageTimer += dt;
   if (state.pageTimer >= PAGE_FLIP_INTERVAL) {
     state.pageTimer -= PAGE_FLIP_INTERVAL;
-    state.page = (state.page + 1) % 2;
+    const nextPage = state.page + 1;
+    if (nextPage >= TITLE_PAGE_COUNT) {
+      // Scoreboard has timed out — signal main.ts to start demo
+      state.demoRequested = true;
+    } else {
+      state.page = nextPage;
+    }
   }
 }
 

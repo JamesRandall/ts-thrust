@@ -19,6 +19,8 @@ import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScree
 import {PostProcessor} from "./postProcessing";
 import {ThrustSounds} from "./sound";
 import {loadScores, saveScores, getHighScoreRank, insertScore, renderScoreboard, ScoreEntry} from "./scoreboard";
+import {gameInputFromKeys, GameInput} from "./input";
+import {createDemoState, setupDemoTimers, resetDemoState, demoModeTick, getDemoInput} from "./demo";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -60,6 +62,13 @@ let highScoreEntry: { active: boolean; rank: number; score: number; name: string
 
 window.addEventListener("keydown", (e) => {
   keys.add(e.code);
+  if (e.code === "KeyF") {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen();
+    }
+  }
   if (highScoreEntry?.active) {
     charQueue.push(e.key);
   }
@@ -68,6 +77,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => { keys.delete(e.code); });
 
 const title = createTitleScreen();
+const demo = createDemoState();
 
 let lastTime = -1;
 let fps = 0;
@@ -251,6 +261,15 @@ async function startGame() {
     postProcessor.render(time);
   }
 
+  /** Exit demo mode and return to the title screen (instructions page). */
+  function exitDemoToTitle() {
+    demo.active = false;
+    sounds.stopAll();
+    resetTitleScreen(title);
+    game = createGame(levels[0], 0);
+    keys.clear();
+  }
+
   function frame(time: number) {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
@@ -259,12 +278,30 @@ async function startGame() {
     // Title screen — show terrain with text overlay, no ship
     if (title.active) {
       updateTitleScreen(title, dt);
+
+      // Scoreboard timed out → start demo
+      if (title.demoRequested) {
+        title.demoRequested = false;
+        title.active = false;
+
+        // Initialise demo: level 0, fresh game, scripted inputs
+        setupDemoTimers();
+        resetDemoState(demo);
+        game = createGame(levels[0], 0);
+        // createGame already starts a teleport-in animation
+
+        postProcessFrame(time);
+        requestAnimationFrame(frame);
+        return;
+      }
+
       renderScene(true);
       renderTitleScreen(ctx, title, INTERNAL_W);
 
       if (keys.size > 0) {
         keys.clear();
         title.active = false;
+        demo.active = false;
         sounds.resume();
         startTeleport(game, false);
       }
@@ -311,6 +348,13 @@ async function startGame() {
     }
 
     // Game over state — wait for any key to restart
+    // During demo: should not happen, but handle gracefully
+    if (game.gameOver && demo.active) {
+      exitDemoToTitle();
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
     if (game.gameOver) {
       sounds.stopAll();
 
@@ -346,6 +390,13 @@ async function startGame() {
     }
 
     // Message overlay — black screen with status bar and text
+    // During demo: skip message overlays entirely, return to title
+    if (game.messageTimer > 0 && demo.active) {
+      exitDemoToTitle();
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
     if (game.messageTimer > 0) {
       sounds.stopAll();
       game.messageTimer--;
@@ -371,10 +422,10 @@ async function startGame() {
         game.messageText = null;
       }
 
-      // FPS counter (toggle with F)
-      if (keys.has("KeyF")) {
+      // FPS counter (toggle with C)
+      if (keys.has("KeyC")) {
         showFps = !showFps;
-        keys.delete("KeyF");
+        keys.delete("KeyC");
       }
       if (showFps) {
         if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
@@ -391,6 +442,14 @@ async function startGame() {
 
     // Teleport animation
     if (game.teleport) {
+      // During demo: any key exits back to title screen
+      if (demo.active && keys.size > 0) {
+        exitDemoToTitle();
+        postProcessFrame(time);
+        requestAnimationFrame(frame);
+        return;
+      }
+
       game.teleport.timer += dt;
       while (game.teleport.timer >= TELEPORT_FRAME_DURATION) {
         game.teleport.timer -= TELEPORT_FRAME_DURATION;
@@ -402,6 +461,13 @@ async function startGame() {
         const wasDisappearing = game.teleport.isDisappearing;
         game.teleport = null;
         if (wasDisappearing) {
+          // During demo: orbit escape returns to title instead of normal logic
+          if (demo.active) {
+            exitDemoToTitle();
+            postProcessFrame(time);
+            requestAnimationFrame(frame);
+            return;
+          }
           processOrbitEscape();
         }
         renderScene();
@@ -424,10 +490,10 @@ async function startGame() {
         }
       }
 
-      // FPS counter (toggle with F)
-      if (keys.has("KeyF")) {
+      // FPS counter (toggle with C)
+      if (keys.has("KeyC")) {
         showFps = !showFps;
-        keys.delete("KeyF");
+        keys.delete("KeyC");
       }
       if (showFps) {
         if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
@@ -442,8 +508,8 @@ async function startGame() {
       return;
     }
 
-    // Pause toggle
-    if (keys.has("KeyP")) {
+    // Pause toggle (disabled during demo)
+    if (!demo.active && keys.has("KeyP")) {
       paused = !paused;
       keys.delete("KeyP");
     }
@@ -457,41 +523,70 @@ async function startGame() {
       return;
     }
 
-    // Number keys switch level (debug)
-    for (let i = 0; i < levels.length; i++) {
-      if (keys.has(`Digit${i + 1}`)) {
+    // Debug keys (disabled during demo)
+    if (!demo.active) {
+      // Number keys switch level (debug)
+      for (let i = 0; i < levels.length; i++) {
+        if (keys.has(`Digit${i + 1}`)) {
+          sounds.stopAll();
+          game = createGame(levels[i], i);
+          keys.delete(`Digit${i + 1}`);
+          break;
+        }
+      }
+
+      // 0 key advances to next cycle (debug) — stay on same level, toggle modifiers
+      if (keys.has("Digit0")) {
         sounds.stopAll();
-        game = createGame(levels[i], i);
-        keys.delete(`Digit${i + 1}`);
-        break;
+        let reverseGravity = !game.reverseGravity;
+        let invisibleLandscape = game.invisibleLandscape;
+        if (!reverseGravity) {
+          invisibleLandscape = !invisibleLandscape;
+        }
+        game = createGame(levels[game.levelNumber], game.levelNumber, {
+          lives: game.lives,
+          score: game.score,
+          missionNumber: game.missionNumber,
+          reverseGravity,
+          invisibleLandscape,
+        });
+        keys.delete("Digit0");
       }
     }
 
-    // 0 key advances to next cycle (debug) — stay on same level, toggle modifiers
-    if (keys.has("Digit0")) {
-      sounds.stopAll();
-      let reverseGravity = !game.reverseGravity;
-      let invisibleLandscape = game.invisibleLandscape;
-      if (!reverseGravity) {
-        invisibleLandscape = !invisibleLandscape;
+    // --- Demo mode: advance scripted keypresses before tick ---
+    if (demo.active) {
+      demoModeTick(demo, dt);
+
+      // Demo sequence exhausted (safety: should not happen, ship crashes first)
+      if (!demo.active) {
+        exitDemoToTitle();
+        postProcessFrame(time);
+        requestAnimationFrame(frame);
+        return;
       }
-      game = createGame(levels[game.levelNumber], game.levelNumber, {
-        lives: game.lives,
-        score: game.score,
-        missionNumber: game.missionNumber,
-        reverseGravity,
-        invisibleLandscape,
-      });
-      keys.delete("Digit0");
     }
 
-    tick(game, dt, keys);
+    // Build game input — from demo bitmask or real keyboard
+    const gameInput: GameInput = demo.active
+      ? getDemoInput(demo)
+      : gameInputFromKeys(keys);
+
+    tick(game, dt, gameInput);
     sounds.tick();
+
+    // --- Demo mode: any real key exits back to title screen ---
+    if (demo.active && keys.size > 0) {
+      exitDemoToTitle();
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
 
     // --- Sound triggers from game tick events ---
     const dying = game.deathSequence !== null;
-    const thrustActive = !dying && keys.has("KeyW") && !game.fuelEmpty;
-    const shieldKeyDown = !dying && keys.has("Space") && !game.fuelEmpty;
+    const thrustActive = !dying && gameInput.thrust && !game.fuelEmpty;
+    const shieldKeyDown = !dying && gameInput.shieldTractor && !game.fuelEmpty;
 
     // Engine/shield: re-issue every tick while active (duration=3 = 150ms, stops naturally)
     if (thrustActive && !shieldKeyDown) {
@@ -627,6 +722,13 @@ async function startGame() {
     // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
+      if (demo.active) {
+        // Demo: orbit escape → return to title (should not happen but handle gracefully)
+        exitDemoToTitle();
+        postProcessFrame(time);
+        requestAnimationFrame(frame);
+        return;
+      }
       sounds.playEnterOrbit();
       startTeleport(game, true);
     }
@@ -634,6 +736,13 @@ async function startGame() {
     // --- Process death (levelEndedFlag) ---
     if (game.levelEndedFlag) {
       game.levelEndedFlag = false;
+      if (demo.active) {
+        // Demo: crash → return to title screen (skip lives/game-over logic)
+        exitDemoToTitle();
+        postProcessFrame(time);
+        requestAnimationFrame(frame);
+        return;
+      }
       if (game.fuelEmpty) {
         triggerMessage(game, "OUT OF FUEL", 'game-over');
       } else {
@@ -651,10 +760,10 @@ async function startGame() {
     // Render visible frame — shield key reveals invisible landscape
     renderScene(false, shieldKeyDown);
 
-    // FPS counter (toggle with F)
-    if (keys.has("KeyF")) {
+    // FPS counter (toggle with C)
+    if (keys.has("KeyC")) {
       showFps = !showFps;
-      keys.delete("KeyF");
+      keys.delete("KeyC");
     }
     if (showFps) {
       if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;

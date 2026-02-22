@@ -9,6 +9,7 @@ import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } fr
 import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 import { StarFieldState, createStarFieldState, tickStarField, seedStarField } from "./stars";
 import { DoorState, createDoorState, tickDoor } from "./doors";
+import { GameInput } from "./input";
 
 // Viewport dimensions in world coordinates
 const VIEWPORT_W = 320 / WORLD_SCALE_X; // 80
@@ -300,12 +301,12 @@ function tractorDistance(
   return d > 255 ? 255 : d;
 }
 
-export function tick(state: GameState, dt: number, keys: Set<string>): void {
+export function tick(state: GameState, dt: number, gameInput: GameInput): void {
   const dying = state.deathSequence !== null;
 
-  // Read raw key state — blocked during death sequence
-  const spacebarDown = !dying && keys.has("Space");
-  const thrustDown = !dying && keys.has("KeyW");
+  // Gate input on death sequence — no player control while dying
+  const spacebarDown = !dying && gameInput.shieldTractor;
+  const thrustDown = !dying && gameInput.thrust;
 
   // Save old position for death explosion origin (before physics update)
   state.oldShipX = state.player.x;
@@ -314,7 +315,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
   // Gate physics input on fuel AND death
   const input: ThrustInput = {
     thrust: thrustDown && !state.fuelEmpty,
-    rotate: dying ? 0 : (keys.has("KeyA") ? -1 : keys.has("KeyD") ? 1 : 0),
+    rotate: dying ? 0 : (gameInput.rotateLeft ? -1 : gameInput.rotateRight ? 1 : 0),
     shield: spacebarDown && !state.fuelEmpty,
   };
 
@@ -384,7 +385,7 @@ export function tick(state: GameState, dt: number, keys: Set<string>): void {
 
     tickPlayerShooting(
         state.playerShooting,
-        !dying && keys.has("Enter"),
+        !dying && gameInput.fire,
         state.shieldActive,
         state.physics.state.angle,
         state.player.x,

@@ -36,7 +36,7 @@ export const levels: Level[] = [
         name: "Level 0",
         terrainColor: bbcMicroColours.red,
         objectColor: bbcMicroColours.green,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
@@ -64,7 +64,7 @@ export const levels: Level[] = [
         name: "Level 1",
         terrainColor: bbcMicroColours.green,
         objectColor: bbcMicroColours.red,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
@@ -95,7 +95,7 @@ export const levels: Level[] = [
         name: "Level 2",
         terrainColor: bbcMicroColours.cyan,
         objectColor: bbcMicroColours.green,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
@@ -136,7 +136,7 @@ export const levels: Level[] = [
         name: "Level 3",
         terrainColor: bbcMicroColours.green,
         objectColor: bbcMicroColours.magenta,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
@@ -178,7 +178,7 @@ export const levels: Level[] = [
         name: "Level 4",
         terrainColor: bbcMicroColours.red,
         objectColor: bbcMicroColours.magenta,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
@@ -232,7 +232,7 @@ export const levels: Level[] = [
         name: "Level 5",
         terrainColor: bbcMicroColours.magenta,
         objectColor: bbcMicroColours.cyan,
-        startingPosition: { x: 108, y: 401 },
+        startingPosition: { x: 112, y: 401 },
         polygons: [
             // Left terrain wall
             [
