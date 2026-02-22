@@ -1,4 +1,4 @@
-import { Level, levels } from "./levels";
+import { Level, SpawnPoint, levels } from "./levels";
 import { ThrustPhysics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
@@ -53,6 +53,8 @@ export interface DeathSequence {
   timer: number;              // Starts at 60, decrements each tick to 0
   shipDestroyed: boolean;     // Ship has been destroyed (explosion spawned)
   backgroundDarkened: boolean; // Background palette set to black at timer == 40
+  midpointYAtDeath: number;   // Midpoint Y when death started (for spawn point selection)
+  hadPodAtDeath: boolean;     // Whether pod was attached when death started
 }
 
 export interface TeleportAnimation {
@@ -114,6 +116,56 @@ export interface GameState {
   invisibleLandscape: boolean;
 }
 
+function selectSpawnPoint(
+  level: Level,
+  currentMidpointY: number,
+  hasPod: boolean,
+): { spawnPoint: SpawnPoint; respawnWithPod: boolean } {
+  const points = level.spawnPoints;
+  let selectedIndex = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].midpointY >= currentMidpointY) {
+      selectedIndex = i;
+      break;
+    }
+    if (i === points.length - 1) {
+      selectedIndex = i;
+    }
+  }
+
+  let respawnWithPod = false;
+  if (hasPod && selectedIndex > 0) {
+    selectedIndex--;
+    respawnWithPod = true;
+  }
+
+  return {
+    spawnPoint: points[selectedIndex],
+    respawnWithPod,
+  };
+}
+
+function applySpawnPoint(state: GameState, spawn: SpawnPoint): void {
+  state.physics.state.x = spawn.midpointX;
+  state.physics.state.y = spawn.midpointY;
+  state.player.x = spawn.midpointX;
+  state.player.y = spawn.midpointY;
+  state.physics.state.shipX = spawn.midpointX;
+  state.physics.state.shipY = spawn.midpointY;
+  state.oldShipX = spawn.midpointX;
+  state.oldShipY = spawn.midpointY;
+  const fresh = createScrollState(
+    spawn.midpointX,
+    spawn.midpointY,
+    VIEWPORT_W,
+    VIEWPORT_H,
+    STATUS_BAR_H,
+  );
+  state.scroll.windowPos.x = fresh.windowPos.x;
+  state.scroll.windowPos.y = fresh.windowPos.y;
+}
+
 export function createGame(
   level: Level,
   levelNumber: number = 0,
@@ -123,17 +175,18 @@ export function createGame(
   const invisibleLandscape = persistent?.invisibleLandscape ?? false;
   const startAngle = reverseGravity ? 16 : 0;
 
+  const spawn = level.spawnPoints[0];
   const physics = new ThrustPhysics({
-    x: level.startingPosition.x,
-    y: level.startingPosition.y,
+    x: spawn.midpointX,
+    y: spawn.midpointY,
     angle: startAngle,
     reverseGravity,
   });
 
   const scrollConfig = createScrollConfig(VIEWPORT_W, VIEWPORT_H, STATUS_BAR_H);
   const scroll = createScrollState(
-      level.startingPosition.x,
-      level.startingPosition.y,
+      spawn.midpointX,
+      spawn.midpointY,
       VIEWPORT_W,
       VIEWPORT_H,
       STATUS_BAR_H,
@@ -146,8 +199,8 @@ export function createGame(
     level,
     physics,
     player: {
-      x: level.startingPosition.x,
-      y: level.startingPosition.y,
+      x: spawn.midpointX,
+      y: spawn.midpointY,
       rotation: (startAngle / 32) * Math.PI * 2,
     },
     fuel: INITIAL_FUEL,
@@ -182,8 +235,8 @@ export function createGame(
     teleport: null,
     gameOver: false,
     deathSequence: null,
-    oldShipX: level.startingPosition.x,
-    oldShipY: level.startingPosition.y,
+    oldShipX: spawn.midpointX,
+    oldShipY: spawn.midpointY,
     reverseGravity,
     invisibleLandscape,
   };
@@ -223,7 +276,13 @@ export function destroyPlayerShip(state: GameState): void {
   if (state.deathSequence?.shipDestroyed) return; // guard: only trigger once
 
   if (!state.deathSequence) {
-    state.deathSequence = { timer: DEATH_TIMER_INITIAL, shipDestroyed: false, backgroundDarkened: false };
+    state.deathSequence = {
+      timer: DEATH_TIMER_INITIAL,
+      shipDestroyed: false,
+      backgroundDarkened: false,
+      midpointYAtDeath: state.physics.state.y,
+      hadPodAtDeath: state.physics.state.podAttached,
+    };
   }
   state.deathSequence.timer = DEATH_TIMER_INITIAL;
   state.deathSequence.shipDestroyed = true;
@@ -242,7 +301,13 @@ export function destroyAttachedPod(state: GameState): void {
   if (!state.physics.state.podAttached) return;
 
   if (!state.deathSequence) {
-    state.deathSequence = { timer: DEATH_TIMER_INITIAL, shipDestroyed: false, backgroundDarkened: false };
+    state.deathSequence = {
+      timer: DEATH_TIMER_INITIAL,
+      shipDestroyed: false,
+      backgroundDarkened: false,
+      midpointYAtDeath: state.physics.state.y,
+      hadPodAtDeath: state.physics.state.podAttached,
+    };
   }
   state.deathSequence.timer = DEATH_TIMER_INITIAL; // reset timer (key spec behaviour)
 
@@ -487,28 +552,29 @@ export function retryLevel(state: GameState): void {
   // Detach pod first if attached
   state.physics.detachPod();
 
+  const ds = state.deathSequence;
+  const { spawnPoint, respawnWithPod } = selectSpawnPoint(
+    state.level,
+    ds ? ds.midpointYAtDeath : state.physics.state.y,
+    ds ? ds.hadPodAtDeath : false,
+  );
+
   const startAngle = state.reverseGravity ? 16 : 0;
-  state.player.x = state.level.startingPosition.x;
-  state.player.y = state.level.startingPosition.y;
   state.player.rotation = (startAngle / 32) * Math.PI * 2;
-  state.physics.state.x = state.level.startingPosition.x;
-  state.physics.state.y = state.level.startingPosition.y;
-  state.physics.state.shipX = state.level.startingPosition.x;
-  state.physics.state.shipY = state.level.startingPosition.y;
   state.physics.state.angle = startAngle;
   state.physics.resetMotion();
   state.collisionResult = CollisionResult.None;
 
-  // Reset scroll centered on starting position
-  const fresh = createScrollState(
-      state.level.startingPosition.x,
-      state.level.startingPosition.y,
-      VIEWPORT_W,
-      VIEWPORT_H,
-      STATUS_BAR_H,
-  );
-  state.scroll.windowPos.x = fresh.windowPos.x;
-  state.scroll.windowPos.y = fresh.windowPos.y;
+  applySpawnPoint(state, spawnPoint);
+
+  if (respawnWithPod) {
+    state.physics.state.podAttached = true;
+    state.physics.state.pod.angleShipToPod = state.reverseGravity ? 0x11 : 0x01;
+    state.physics.state.pod.angleFrac = 0;
+    state.physics.state.pod.angularVelocity = 0;
+    state.physics.state.pod.tetherIndex = 15;
+  }
+
   state.scroll.scrollSpeed.x = 0;
   state.scroll.scrollSpeed.y = 0;
   state.scrollAccumulator = 0;
@@ -537,8 +603,6 @@ export function retryLevel(state: GameState): void {
   state.pendingAction = null;
   state.teleport = null;
   state.deathSequence = null;
-  state.oldShipX = state.level.startingPosition.x;
-  state.oldShipY = state.level.startingPosition.y;
   startTeleport(state, false);
 }
 

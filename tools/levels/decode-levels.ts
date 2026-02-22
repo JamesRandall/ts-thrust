@@ -42,11 +42,28 @@ type DoorConfig = {
     innerX: number;
 };
 
+/**
+ * A spawn/respawn point. Levels with vertical depth have multiple checkpoints
+ * ordered top-to-bottom by Y. On death the game picks the nearest checkpoint
+ * at or above the ship's current Y position. The first entry (index 0) is
+ * always used for a fresh level start.
+ *
+ * Fields decoded from level_reset_data:
+ *   midpointX/Y  - ship midpoint position (Y is 16-bit: yHigh*256 + yInt)
+ *   windowX/Y    - initial scroll window position (Y is 16-bit: yExt*256 + yInt)
+ */
+type SpawnPoint = {
+    midpointX: number;
+    midpointY: number;
+    windowX: number;
+    windowY: number;
+};
+
 type Level = {
     name: string;
     terrainColor: string;
     objectColor: string;
-    startingPosition: ObjectPosition;
+    spawnPoints: SpawnPoint[];
     polygons: Polygon[];
     turrets: TurretPosition[];
     powerPlant: ObjectPosition;
@@ -271,10 +288,36 @@ function calculateTerrainDepth(countTable: number[], yOffset: number): number {
 // Object & starting position decoders
 // ============================================================================
 
-function getStartingPosition(levelIndex: number): ObjectPosition {
+/**
+ * Decode all spawn/respawn points for a level from the reset data.
+ *
+ * The reset data is stored as 6 parallel arrays (stripes) of `size` entries:
+ *   stripe 0: midpoint_ypos_INT_HI  (Y high byte)
+ *   stripe 1: midpoint_ypos_INT     (Y low byte)
+ *   stripe 2: window_xpos_INT
+ *   stripe 3: window_ypos_EXT       (window Y high byte)
+ *   stripe 4: window_ypos_INT       (window Y low byte)
+ *   stripe 5: midpoint_xpos_INT
+ *
+ * Points are ordered top-to-bottom by Y. On death the 6502 code walks
+ * through them doing a 16-bit comparison (yHigh:yInt >= shipYHigh:shipYInt)
+ * to find the nearest checkpoint at or above the ship's current depth.
+ */
+function getSpawnPoints(levelIndex: number): SpawnPoint[] {
     const r = levelResetData[levelIndex];
     const s = r.size;
-    return { x: r.data[s * 5], y: r.data[0] * 256 + r.data[s] };
+    const points: SpawnPoint[] = [];
+
+    for (let i = 0; i < s; i++) {
+        points.push({
+            midpointX: r.data[s * 5 + i] + 4,
+            midpointY: r.data[s * 0 + i] * 256 + r.data[s * 1 + i],
+            windowX:   r.data[s * 2 + i],
+            windowY:   r.data[s * 3 + i] * 256 + r.data[s * 4 + i],
+        });
+    }
+
+    return points;
 }
 
 function decodeObjects(levelIndex: number) {
@@ -334,7 +377,7 @@ function decodeLevels(): Level[] {
         if (rightPolygon.length > 0) polygons.push(rightPolygon);
 
         const objects = decodeObjects(i);
-        const startingPosition = getStartingPosition(i);
+        const spawnPoints = getSpawnPoints(i);
         const terrainColor = bbcMicroColours[levelLandscapeColour[i]] ?? "white";
         const objectColor = bbcMicroColours[levelObjectColour[i]] ?? "white";
 
@@ -342,7 +385,7 @@ function decodeLevels(): Level[] {
             name: `Level ${i}`,
             terrainColor,
             objectColor,
-            startingPosition,
+            spawnPoints,
             polygons,
             turrets: objects.turrets,
             powerPlant: objects.powerPlant,
@@ -400,11 +443,18 @@ function generateOutput(levels: Level[]): string {
     lines.push(`    innerX: number;`);
     lines.push(`};`);
     lines.push(``);
+    lines.push(`export type SpawnPoint = {`);
+    lines.push(`    midpointX: number;`);
+    lines.push(`    midpointY: number;`);
+    lines.push(`    windowX: number;`);
+    lines.push(`    windowY: number;`);
+    lines.push(`};`);
+    lines.push(``);
     lines.push(`export type Level = {`);
     lines.push(`    name: string;`);
     lines.push(`    terrainColor: string;`);
     lines.push(`    objectColor: string;`);
-    lines.push(`    startingPosition: ObjectPosition;`);
+    lines.push(`    spawnPoints: SpawnPoint[];`);
     lines.push(`    polygons: Polygon[];`);
     lines.push(`    turrets: TurretPosition[];`);
     lines.push(`    powerPlant: ObjectPosition;`);
@@ -432,7 +482,13 @@ function generateOutput(levels: Level[]): string {
         lines.push(`        name: "${level.name}",`);
         lines.push(`        terrainColor: bbcMicroColours.${level.terrainColor},`);
         lines.push(`        objectColor: bbcMicroColours.${level.objectColor},`);
-        lines.push(`        startingPosition: ${formatPosition(level.startingPosition)},`);
+        lines.push(`        spawnPoints: [`);
+        for (let sp = 0; sp < level.spawnPoints.length; sp++) {
+            const p = level.spawnPoints[sp];
+            const label = sp === 0 ? " // initial spawn" : ` // checkpoint ${sp}`;
+            lines.push(`            { midpointX: ${p.midpointX}, midpointY: ${p.midpointY}, windowX: ${p.windowX}, windowY: ${p.windowY} },${label}`);
+        }
+        lines.push(`        ],`);
         lines.push(`        polygons: [`);
         for (let p = 0; p < level.polygons.length; p++) {
             const label = p === 0 ? "Left terrain wall" : "Right terrain wall";
@@ -473,7 +529,8 @@ console.log(`Written ${outputPath} with ${levels.length} levels`);
 
 for (const level of levels) {
     console.log(
-        `  ${level.name}: color=${level.terrainColor}, start=(${level.startingPosition.x},${level.startingPosition.y}), ` +
+        `  ${level.name}: color=${level.terrainColor}, spawns=${level.spawnPoints.length}, ` +
+        `start=(${level.spawnPoints[0].midpointX},${level.spawnPoints[0].midpointY}), ` +
         `polygons=${level.polygons.length}, turrets=${level.turrets.length}, fuel=${level.fuel.length}`
     );
 }

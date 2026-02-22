@@ -17,11 +17,18 @@ export type DoorConfig = {
     innerX: number;
 };
 
+export type SpawnPoint = {
+    midpointX: number;
+    midpointY: number;
+    windowX: number;
+    windowY: number;
+};
+
 export type Level = {
     name: string;
     terrainColor: string;
     objectColor: string;
-    startingPosition: ObjectPosition;
+    spawnPoints: SpawnPoint[];
     polygons: Polygon[];
     turrets: TurretPosition[];
     powerPlant: ObjectPosition;
@@ -29,14 +36,16 @@ export type Level = {
     fuel: ObjectPosition[];
     switches: SwitchPosition[];
     doorConfig: DoorConfig | null;
-}
+};
 
 export const levels: Level[] = [
     {
         name: "Level 0",
         terrainColor: bbcMicroColours.red,
         objectColor: bbcMicroColours.green,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+        ],
         polygons: [
             // Left terrain wall
             [
@@ -64,7 +73,9 @@ export const levels: Level[] = [
         name: "Level 1",
         terrainColor: bbcMicroColours.green,
         objectColor: bbcMicroColours.red,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+        ],
         polygons: [
             // Left terrain wall
             [
@@ -95,7 +106,11 @@ export const levels: Level[] = [
         name: "Level 2",
         terrainColor: bbcMicroColours.cyan,
         objectColor: bbcMicroColours.green,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+            { midpointX: 138, midpointY: 557, windowX: 111, windowY: 426 }, // checkpoint 1
+            { midpointX: 76, midpointY: 662, windowX: 50, windowY: 547 }, // checkpoint 2
+        ],
         polygons: [
             // Left terrain wall
             [
@@ -136,7 +151,11 @@ export const levels: Level[] = [
         name: "Level 3",
         terrainColor: bbcMicroColours.green,
         objectColor: bbcMicroColours.magenta,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+            { midpointX: 127, midpointY: 486, windowX: 87, windowY: 352 }, // checkpoint 1
+            { midpointX: 165, midpointY: 586, windowX: 118, windowY: 472 }, // checkpoint 2
+        ],
         polygons: [
             // Left terrain wall
             [
@@ -178,7 +197,12 @@ export const levels: Level[] = [
         name: "Level 4",
         terrainColor: bbcMicroColours.red,
         objectColor: bbcMicroColours.magenta,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+            { midpointX: 127, midpointY: 616, windowX: 88, windowY: 494 }, // checkpoint 1
+            { midpointX: 111, midpointY: 732, windowX: 67, windowY: 614 }, // checkpoint 2
+            { midpointX: 133, midpointY: 789, windowX: 100, windowY: 671 }, // checkpoint 3
+        ],
         polygons: [
             // Left terrain wall
             [
@@ -232,7 +256,13 @@ export const levels: Level[] = [
         name: "Level 5",
         terrainColor: bbcMicroColours.magenta,
         objectColor: bbcMicroColours.cyan,
-        startingPosition: { x: 112, y: 401 },
+        spawnPoints: [
+            { midpointX: 112, midpointY: 401, windowX: 86, windowY: 292 }, // initial spawn
+            { midpointX: 166, midpointY: 587, windowX: 140, windowY: 472 }, // checkpoint 1
+            { midpointX: 158, midpointY: 724, windowX: 130, windowY: 602 }, // checkpoint 2
+            { midpointX: 139, midpointY: 810, windowX: 110, windowY: 692 }, // checkpoint 3
+            { midpointX: 178, midpointY: 920, windowX: 135, windowY: 795 }, // checkpoint 4
+        ],
         polygons: [
             // Left terrain wall
             [
