@@ -6,6 +6,8 @@ Thrust is a gravity/inertia game where you pilot a ship through caverns, collect
 
 This conversion focuses on authenticity — recapturing the look and feel of the original BBC Micro game as closely as possible, using constants, algorithms, and behaviours extracted directly from the 6502 source code.
 
+There's an accompanying article on how I did this recreation you can [read on my blog](https://www.jamesdrandall.com/posts/thrust_ai_powered_software_archaeology/).
+
 ![Thrust](screenshots/typescript_thrust.png)
 
 ## Acknowledgements
