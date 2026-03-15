@@ -582,8 +582,6 @@ export function retryLevel(state: GameState): void {
   for (const b of state.playerShooting.bullets) b.active = false;
   state.playerShooting.bulletIndex = 0;
   state.playerShooting.pressedFire = false;
-  state.destroyedTurrets.clear();
-  state.destroyedFuel.clear();
   state.explosions.particles = [];
   state.fuelCollection = createFuelCollectionState(state.level.fuel.length);
   state.generator = createGeneratorState();
