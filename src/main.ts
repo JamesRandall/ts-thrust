@@ -6,7 +6,7 @@ import podStandPng from "./sprites/pod_stand.png";
 import podPng from "./sprites/pod.png";
 import shieldPng from "./sprites/shield.png";
 import {levels} from "./levels";
-import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, addScore, startTeleport, MESSAGE_DURATION, destroyPlayerShip, destroyAttachedPod} from "./game";
+import {createGame, tick, retryLevel, triggerMessage, advanceToNextLevel, missionComplete, addScore, startTeleport, MESSAGE_DURATION, destroyPlayerShip, destroyAttachedPod, getPlanetExplodeBgColor} from "./game";
 import {createCollisionBuffer, renderCollisionBuffer, testCollision, testLineCollision, testRectCollision, CollisionResult} from "./collision";
 import {renderBullets, removeBulletsHittingShip, removeCollidingBullets, renderPlayerBullets, processPlayerBulletCollisions} from "./bullets";
 import {renderExplosions, spawnExplosion, orColours} from "./explosions";
@@ -151,13 +151,21 @@ async function startGame() {
 
     // Invisible landscape: terrain is black unless shield reveals it
     const landscapeHidden = game.invisibleLandscape && !landscapeRevealed;
-    const effectiveTerrainColor = landscapeHidden ? bbcMicroColours.black : game.level.terrainColor;
+    const planetExploding = game.planetExplodeAnim > 0;
     // Tether and bullets use white on invisible levels (always visible)
     const lineColor = game.invisibleLandscape ? bbcMicroColours.white : game.level.terrainColor;
-    // Build effective level with overridden terrain color for rendering
-    const effectiveLevel = landscapeHidden ? { ...game.level, terrainColor: bbcMicroColours.black } : game.level;
+    // Force terrain to black during invisible landscape OR planet explosion
+    const terrainBlack = landscapeHidden || planetExploding;
+    const effectiveLevel = terrainBlack ? { ...game.level, terrainColor: bbcMicroColours.black } : game.level;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Background: flash during planet explosion, otherwise clear to black
+    const explodeBg = getPlanetExplodeBgColor(game);
+    if (explodeBg) {
+      ctx.fillStyle = explodeBg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
     if (!title.active && !highScoreEntry?.active) {
       renderStars(ctx, game.starField, camX, camY);
@@ -208,7 +216,7 @@ async function startGame() {
       }
 
       if (game.physics.state.podAttached) {
-        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, effectiveTerrainColor);
+        drawRemappedSprite(ctx, podSprite, podCX - Math.floor(podSprite.width / 2), podCY - Math.floor(podSprite.height / 2), game.level.objectColor, effectiveLevel.terrainColor);
       }
     }
 
@@ -238,7 +246,7 @@ async function startGame() {
     } else if (game.generator.planetCountdown >= 0) {
       game.lives--;
       if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-      else triggerMessage(game, "PLANET DESTROYED", 'next-level');
+      else triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
     } else {
       game.lives--;
       if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
@@ -710,12 +718,34 @@ async function startGame() {
       }
     }
 
-    // Planet self-destruct countdown reached 0
+    // Planet self-destruct countdown reached 0 — start explosion animation
     if (game.planetKilled) {
       game.planetKilled = false;
-      if (!game.deathSequence) {
+      if (game.planetExplodeAnim === 0 && !game.deathSequence) {
+        game.planetExplodeAnim = 15;
+
+        // Destroy player ship and all remaining objects at once
         destroyPlayerShip(game);
         sounds.playExplosion();
+        for (let i = 0; i < game.level.turrets.length; i++) {
+          if (!game.destroyedTurrets.has(i)) {
+            game.destroyedTurrets.add(i);
+            const t = game.level.turrets[i];
+            spawnExplosion(game.explosions, t.x + 2, t.y + 4, bbcMicroColours.yellow);
+          }
+        }
+        for (let i = 0; i < game.level.fuel.length; i++) {
+          if (!game.destroyedFuel.has(i)) {
+            game.destroyedFuel.add(i);
+            const f = game.level.fuel[i];
+            spawnExplosion(game.explosions, f.x + 2, f.y + 4, bbcMicroColours.yellow);
+          }
+        }
+        if (!game.generator.destroyed) {
+          game.generator.destroyed = true;
+          const pp = game.level.powerPlant;
+          spawnExplosion(game.explosions, pp.x + 4, pp.y + 4, bbcMicroColours.yellow);
+        }
       }
     }
 
@@ -750,7 +780,7 @@ async function startGame() {
         if (game.lives <= 0) {
           triggerMessage(game, "GAME OVER", 'game-over');
         } else if (game.generator.planetCountdown >= 0 || game.planetKilled) {
-          triggerMessage(game, "PLANET DESTROYED", 'next-level');
+          triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
         } else {
           retryLevel(game);
         }

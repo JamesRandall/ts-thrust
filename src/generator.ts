@@ -48,8 +48,6 @@ export function tickGenerator(
   state: GeneratorState,
   explosions: ExplosionState,
   level: Level,
-  destroyedTurrets: Set<number>,
-  destroyedFuel: Set<number>,
 ): { playerKilled: boolean } {
   let playerKilled = false;
   state.countdownBeepThisTick = false;
@@ -83,24 +81,6 @@ export function tickGenerator(
     // Flash: if not destroyed and countdown still active
     if (!state.destroyed && state.planetCountdown > 0) {
       state.visible = (state.countdownTicks & COUNTDOWN_FLASH_MASK) !== 0;
-    }
-
-    // Object cascade: destroy one non-destroyed turret and one non-destroyed fuel per tick
-    for (let i = 0; i < level.turrets.length; i++) {
-      if (!destroyedTurrets.has(i)) {
-        destroyedTurrets.add(i);
-        const t = level.turrets[i];
-        spawnExplosion(explosions, t.x + 2, t.y + 4, "#ffff00");
-        break;
-      }
-    }
-    for (let i = 0; i < level.fuel.length; i++) {
-      if (!destroyedFuel.has(i)) {
-        destroyedFuel.add(i);
-        const f = level.fuel[i];
-        spawnExplosion(explosions, f.x + 2, f.y + 4, "#ffff00");
-        break;
-      }
     }
   }
 

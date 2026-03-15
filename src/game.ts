@@ -41,6 +41,17 @@ const ORBIT_ESCAPE_Y = 288;
 // Duration of message overlay in game ticks (~2 seconds at 33 Hz)
 export const MESSAGE_DURATION = 66;
 
+// Planet explosion animation — BBC Micro MODE 5 palette cycling
+const PLANET_EXPLODE_BG_TABLE: readonly number[] = [
+  0x00, 0x00, 0x04, 0x01, 0x05, 0x02, 0x06, 0x03,
+  0x07, 0x07, 0x03, 0x06, 0x02, 0x05, 0x01, 0x04,
+];
+const BBC_PHYSICAL_COLOURS: readonly string[] = [
+  "#000000", "#ff0000", "#00ff00", "#ffff00",
+  "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+];
+const VSYNC_STEP_S = 1 / 50; // 20ms — BBC Micro vsync rate
+
 // Death sequence constants
 const DEATH_TIMER_INITIAL = 0x3C;       // 60 ticks
 const DEATH_BACKGROUND_BLACK_AT = 0x28; // 40 — timer value when background darkens
@@ -114,6 +125,9 @@ export interface GameState {
   oldShipY: number;
   reverseGravity: boolean;
   invisibleLandscape: boolean;
+  planetExplodeAnim: number;       // 0 = inactive, 15→0 = animation counter
+  planetExplodeAccumulator: number; // time accumulator for 50Hz vsync simulation
+  frameCounter: number;            // vsync frame counter (increments at 50Hz)
 }
 
 function selectSpawnPoint(
@@ -239,6 +253,9 @@ export function createGame(
     oldShipY: spawn.midpointY,
     reverseGravity,
     invisibleLandscape,
+    planetExplodeAnim: 0,
+    planetExplodeAccumulator: 0,
+    frameCounter: 0,
   };
   startTeleport(state, false);
   return state;
@@ -367,6 +384,18 @@ function tractorDistance(
 }
 
 export function tick(state: GameState, dt: number, gameInput: GameInput): void {
+  // Planet explosion animation runs at 50Hz (BBC Micro vsync rate)
+  state.planetExplodeAccumulator += dt;
+  while (state.planetExplodeAccumulator >= VSYNC_STEP_S) {
+    state.planetExplodeAccumulator -= VSYNC_STEP_S;
+    state.frameCounter++;
+    if (state.planetExplodeAnim > 0) {
+      if (state.frameCounter % 2 === 0) {
+        state.planetExplodeAnim--;
+      }
+    }
+  }
+
   const dying = state.deathSequence !== null;
 
   // Gate input on death sequence — no player control while dying
@@ -471,7 +500,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
         state.level.terrainColor,
     );
 
-    const genResult = tickGenerator(state.generator, state.explosions, state.level, state.destroyedTurrets, state.destroyedFuel);
+    const genResult = tickGenerator(state.generator, state.explosions, state.level);
     if (genResult.playerKilled) {
       state.planetKilled = true;
     }
@@ -601,7 +630,15 @@ export function retryLevel(state: GameState): void {
   state.pendingAction = null;
   state.teleport = null;
   state.deathSequence = null;
+  state.planetExplodeAnim = 0;
+  state.planetExplodeAccumulator = 0;
   startTeleport(state, false);
+}
+
+/** Get the background colour for the planet explosion animation, or null if inactive. */
+export function getPlanetExplodeBgColor(state: GameState): string | null {
+  if (state.planetExplodeAnim <= 0) return null;
+  return BBC_PHYSICAL_COLOURS[PLANET_EXPLODE_BG_TABLE[state.planetExplodeAnim]];
 }
 
 /** Set message overlay and pending action. */
