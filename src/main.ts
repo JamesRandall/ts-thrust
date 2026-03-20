@@ -15,7 +15,7 @@ import {getDoorPolygon, triggerDoor} from "./doors";
 import {handleGeneratorHit} from "./generator";
 import {renderStars} from "./stars";
 import {bbcMicroColours} from "./rendering";
-import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScreen} from "./titleScreen";
+import {createTitleScreen, resetTitleScreen, updateTitleScreen, renderTitleScreen, startKeyRemap, handleRemapKey} from "./titleScreen";
 import {PostProcessor} from "./postProcessing";
 import {ThrustSounds} from "./sound";
 import {loadScores, saveScores, getHighScoreRank, insertScore, renderScoreboard, ScoreEntry} from "./scoreboard";
@@ -307,11 +307,24 @@ async function startGame() {
       renderTitleScreen(ctx, title, INTERNAL_W);
 
       if (keys.size > 0) {
-        keys.clear();
-        title.active = false;
-        demo.active = false;
-        sounds.resume();
-        startTeleport(game, false);
+        if (title.remap) {
+          // During remap: capture the first key pressed
+          const code = keys.values().next().value as string;
+          keys.clear();
+          handleRemapKey(title, code);
+        } else if (keys.has("KeyK")) {
+          // K enters key remap mode
+          keys.clear();
+          startKeyRemap(title);
+        } else if (keys.has("Space")) {
+          keys.clear();
+          title.active = false;
+          demo.active = false;
+          sounds.resume();
+          startTeleport(game, false);
+        } else {
+          keys.clear();
+        }
       }
 
       postProcessFrame(time);
