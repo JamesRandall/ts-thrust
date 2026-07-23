@@ -496,7 +496,8 @@ export class ThrustPhysics {
 
       for (let i = 0; i < ANGLE_SEARCH_CANDIDATES; i++) {
         const { dx, dy } = this.calculateTetherDelta();
-        const dist = Math.abs(dx - targetDx) + Math.abs(dy - targetDy);
+        //const dist = Math.abs(dx - targetDx) + Math.abs(dy - targetDy);
+        const dist = Math.abs(dx - targetDx)*2 + Math.abs(dy - targetDy); // Better than previous.  Accounts for fact that y coordinates are scaled by 2. This is possibly in 6502 code in section .L2086.  There are twice as many ROLs for the deltax variables as for the deltay variables.
 
         if (dist < bestDist) {
           bestDist = dist;
