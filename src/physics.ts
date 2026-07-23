@@ -415,7 +415,7 @@ export class ThrustPhysics {
     // precision, but the tether calculation must use a clean integer byte
     // so that carry and top-nibble are consistent (matching the original
     // 8-bit register behaviour).
-    const frac = Math.round(pod.angleFrac) & BYTE_MASK;
+    const frac = pod.angleFrac & BYTE_MASK; // Fix 2026-07 mikefairbank. Truncate, don’t round
     const fracPlusEight = frac + 8;
     const carry = fracPlusEight > 0xFF ? 1 : 0;
     const topNibble = fracPlusEight & HIGH_NIBBLE_MASK;

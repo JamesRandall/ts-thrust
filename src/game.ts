@@ -194,6 +194,7 @@ export function createGame(
     x: spawn.midpointX,
     y: spawn.midpointY,
     angle: startAngle,
+    level: levelNumber, // Fix 2026-07 mikefairbank. Added this line to fix weak gravity bug
     reverseGravity,
   });
 
