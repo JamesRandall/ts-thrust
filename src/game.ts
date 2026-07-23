@@ -135,23 +135,31 @@ function selectSpawnPoint(
   currentMidpointY: number,
   hasPod: boolean,
 ): { spawnPoint: SpawnPoint; respawnWithPod: boolean } {
+
   const points = level.spawnPoints;
   let selectedIndex = 0;
+  let respawnWithPod = hasPod;
 
   for (let i = 0; i < points.length; i++) {
     if (points[i].midpointY >= currentMidpointY) {
       selectedIndex = i;
       break;
     }
+
     if (i === points.length - 1) {
       selectedIndex = i;
+
+      // Matches the 6502's special handling of the deepest checkpoint:
+      // lose the pod when respawning here.
+      respawnWithPod = false;
     }
   }
 
-  let respawnWithPod = false;
-  if (hasPod && selectedIndex > 0) {
+  // 6502 DEY logic
+  if (!hasPod && selectedIndex > 0) {
+    // on way down tunnels (i.e. without pod), we don't progress to the next waypoint
+    // until we've definitely gone right past it.  Hence move back one way point:
     selectedIndex--;
-    respawnWithPod = true;
   }
 
   return {
