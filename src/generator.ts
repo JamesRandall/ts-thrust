@@ -57,10 +57,10 @@ export function tickGenerator(
   // Recharge decrement: every other tick
   if ((state.tickCounter & 1) === 0) {
     if (state.rechargeCounter > 0) {
-      state.rechargeCounter--;
+      state.rechargeCounter--;  
     }
     if (state.rechargeIncrease > 0) {
-      state.rechargeIncrease--;
+      //state.rechargeIncrease--;  2026-07 mikefairbank.  Removed to stop the generator's health recharging (to match original game logic).
     }
   }
 
