@@ -116,6 +116,8 @@ export interface GameState {
   levelEndedFlag: boolean;
   escapedToOrbit: boolean;
   messageText: string | null;
+  messageTextAbove: string | null;
+  messageTextBelow: string | null;
   messageTimer: number;
   pendingAction: PendingAction;
   teleport: TeleportAnimation | null;
@@ -705,11 +707,14 @@ export function addScore(state: GameState, points: number): void {
 }
 
 /** Apply mission complete bonus scoring and extra lives. */
-export function missionComplete(state: GameState): void {
+export function missionComplete(state: GameState): void {  // MIKE UPDATED
   state.missionNumber++;
+  let score=0;
   let loopCount = state.levelNumber + BONUS_LOOPS_BASE;
   if (state.generator.planetCountdown >= 0) loopCount += BONUS_LOOPS_PLANET_DESTROYED;
   for (let i = 0; i < loopCount; i++) {
     addScore(state, BONUS_SCORE_PER_LOOP);
+    score+=BONUS_SCORE_PER_LOOP;
   }
+  state.messageTextBelow="Bonus "+score;
 }

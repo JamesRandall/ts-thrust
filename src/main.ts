@@ -236,21 +236,51 @@ async function startGame() {
     const cy = 128;
     drawText(ctx, text, cx, cy, bbcMicroColours.white);
   }
+  function drawCenteredMessages(text1: string, text2: string, text3: string) {
+    const cx1 = Math.floor((INTERNAL_W - text1.length * 8) / 2);
+    const cy1 = 128-20;
+    drawText(ctx, text1, cx1, cy1, bbcMicroColours.red);
+    const cx2 = Math.floor((INTERNAL_W - text2.length * 8) / 2);
+    const cy2 = 128;
+    drawText(ctx, text2, cx2, cy2, bbcMicroColours.green);
+    const cx3 = Math.floor((INTERNAL_W - text3.length * 8) / 2);
+    const cy3 = 128+20;
+    drawText(ctx, text3, cx3, cy3, bbcMicroColours.yellow);
+  }
 
-  function processOrbitEscape() {
+  function processOrbitEscape() { //MIKE FIXES
+    const planetDestroyed = game.generator.planetCountdown >= 0;
     if (game.fuelEmpty) {
-      triggerMessage(game, "OUT OF FUEL", 'game-over');
-    } else if (game.physics.state.podAttached) {
+      triggerMessage(game, "OUT OF FUEL", "game-over", MESSAGE_DURATION * 2);
+      return;
+    }
+
+    if (game.physics.state.podAttached) {
       missionComplete(game);
-      triggerMessage(game, "MISSION COMPLETE", 'next-level');
-    } else if (game.generator.planetCountdown >= 0) {
-      game.lives--;
-      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-      else triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
+      if (planetDestroyed) {
+        game.messageTextAbove = "PLANET DESTROYED";
+      }
+      triggerMessage(game, "MISSION "+game.missionNumber+" COMPLETE", "next-level", MESSAGE_DURATION * 2);
+      return;
+    }
+
+    if (planetDestroyed) {
+      game.messageTextAbove = "PLANET DESTROYED";
+      if (game.lives <= 0) {
+        triggerMessage(game, "GAME OVER", "game-over");
+      } else {
+        triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
+        game.messageTextBelow = "NO BONUS";
+      }
+      return;
+    }
+
+    // Mission incomplete and planet not destroyed - so retry.
+    //game.lives--;
+    if (game.lives <= 0) {
+      triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
     } else {
-      game.lives--;
-      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-      else triggerMessage(game, "MISSION INCOMPLETE", 'retry');
+      triggerMessage(game, "MISSION INCOMPLETE", "retry", MESSAGE_DURATION * 2);
     }
   }
 
@@ -424,7 +454,7 @@ async function startGame() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
       if (game.messageText) {
-        drawCenteredMessage(game.messageText);
+        drawCenteredMessages(game.messageTextAbove!=null?game.messageTextAbove:"", game.messageText, game.messageTextBelow!=null?game.messageTextBelow:"");
       }
 
       if (game.messageTimer === 0 && game.pendingAction) {
