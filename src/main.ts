@@ -662,6 +662,11 @@ async function startGame() {
       sounds.playCollect();
     }
 
+    if (game.podCollectedThisTick) {
+      sounds.playCollect();
+      game.podCollectedThisTick=false;
+    }
+
     // Countdown beep
     if (game.generator.countdownBeepThisTick) {
       sounds.playCountdown();

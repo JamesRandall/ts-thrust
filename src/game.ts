@@ -103,6 +103,7 @@ export interface GameState {
   destroyedFuel: Set<number>;
   explosions: ExplosionState;
   fuelCollection: FuelCollectionState;
+  podCollectedThisTick: boolean;
   generator: GeneratorState;
   doorState: DoorState;
   starField: StarFieldState;
@@ -559,6 +560,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
             const podWorldY = state.level.podPedestal.y + 4 / WORLD_SCALE_Y;
             state.physics.attachPod(podWorldX, podWorldY);
             state.podLineExists = true;
+            state.podCollectedThisTick = true;
           }
           // Dead zone ($75-$83): no change
         }
