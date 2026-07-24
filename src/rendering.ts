@@ -397,7 +397,7 @@ export function drawStatusBar(
   const fuelValX = fuelX + 4 * charW - fuelStr.length * charW;
   drawText(ctx, fuelStr, fuelValX, valueY, bbcMicroColours.yellow, scale);
 
-  const livesStr = String(lives);
+  const livesStr = String(Math.max(0,lives-1));
   const livesValX = livesX + Math.floor((5 * charW - livesStr.length * charW) / 2);
   drawText(ctx, livesStr, livesValX, valueY, bbcMicroColours.yellow, scale);
 

@@ -230,7 +230,7 @@ export function createGame(
       rotation: (startAngle / 32) * Math.PI * 2,
     },
     fuel: INITIAL_FUEL,
-    lives: persistent?.lives ?? 3,
+    lives: persistent?.lives ?? 4,
     score: persistent?.score ?? 0,
     collisionResult: CollisionResult.None,
     shieldActive: false,
