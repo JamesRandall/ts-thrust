@@ -624,7 +624,8 @@ async function startGame() {
       : gameInputFromKeys(keys);
 
     tick(game, dt, gameInput);
-    sounds.tick();
+    if (!demo.active)
+        sounds.tick();
 
     // --- Demo mode: any real key exits back to title screen ---
     if (demo.active && keys.size > 0) {
