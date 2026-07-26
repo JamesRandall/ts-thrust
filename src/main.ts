@@ -678,6 +678,12 @@ async function startGame() {
       sounds.playCollect();
     }
 
+    // Extra-life ping
+    if (game.extraLifeThisTick) {
+      sounds.playCountdown(); 
+      game.extraLifeThisTick=false;
+    }
+
     if (game.podCollectedThisTick) {
       sounds.playCollect();
       game.podCollectedThisTick=false;

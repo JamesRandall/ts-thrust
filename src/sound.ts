@@ -34,7 +34,7 @@ const sounds = {
   collect_2:   { channel: CHANNEL_TONE2_QUEUED, amplitude: 0,   pitch: 0xbe, duration: 2   },
   engine:      { channel: CHANNEL_NOISE_FLUSH, amplitude: -10, pitch: NOISE_WHITE_1024, duration: 3   },
   countdown:   { channel: CHANNEL_TONE2_QUEUED, amplitude: -15, pitch: 0x96, duration: 1   },
-  enter_orbit: { channel: CHANNEL_TONE2_FLUSH, amplitude: 3,   pitch: 0xb9, duration: 1   },
+  enter_orbit: { channel: CHANNEL_TONE2_QUEUED, amplitude: 3,   pitch: 0xb9, duration: 1   },
 } as const;
 
 type SoundName = keyof typeof sounds;

@@ -106,6 +106,7 @@ export interface GameState {
   explosions: ExplosionState;
   fuelCollection: FuelCollectionState;
   podCollectedThisTick: boolean;
+  extraLifeThisTick: boolean;
   generator: GeneratorState;
   doorState: DoorState;
   starField: StarFieldState;
@@ -265,6 +266,7 @@ export function createGame(
     messageTimer: 0,
     messageTimerSecond: 0,
     pendingAction: null,
+    extraLifeThisTick: false,    
     teleport: null,
     gameOver: false,
     deathSequence: null,
@@ -707,7 +709,7 @@ export function advanceToNextLevel(state: GameState): GameState {
     invisibleLandscape,
   });
   newState.turretFiring.shootProbability =  getHostileGunShootProbability(newState.missionNumber, state.planetDestroyedHostileGunModifier);
-
+  newState.extraLifeThisTick=state.extraLifeThisTick;
 
   // Show modifier message on first activation of each cycle
   if (state.missionNumber<15) {
@@ -733,7 +735,8 @@ export function addScore(state: GameState, points: number): void {
   const oldThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
   state.score += points;
   const newThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
-  state.lives += (newThousands - oldThousands);
+  const life_bonus=(newThousands - oldThousands);
+  state.lives += life_bonus;
 }
 
 /** Apply mission complete bonus scoring and extra lives. */
@@ -742,9 +745,11 @@ export function missionComplete(state: GameState): void {  // MIKE UPDATED
   let score=0;
   let loopCount = state.levelNumber + BONUS_LOOPS_BASE;
   if (state.generator.planetCountdown >= 0) loopCount += BONUS_LOOPS_PLANET_DESTROYED;
+  const oldLives=state.lives;
   for (let i = 0; i < loopCount; i++) {
     addScore(state, BONUS_SCORE_PER_LOOP);
     score+=BONUS_SCORE_PER_LOOP;
   }
   state.messageTextBelow="Bonus "+score;
+  state.extraLifeThisTick=state.lives>oldLives;
 }
