@@ -248,7 +248,7 @@ async function startGame() {
     drawText(ctx, text3, cx3, cy3, bbcMicroColours.yellow);
   }
 
-  function processOrbitEscape() { //MIKE FIXES
+  function processOrbitEscape() { 
     const planetDestroyed = game.generator.planetCountdown >= 0;
     if (game.fuelEmpty) {
       triggerMessage(game, "OUT OF FUEL", "game-over", MESSAGE_DURATION * 2);
@@ -312,6 +312,13 @@ async function startGame() {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
     handlePostProcessKeys();
+    
+    if (keys.has("Escape")) {
+      exitDemoToTitle();
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
 
     // Title screen — show terrain with text overlay, no ship
     if (title.active) {
