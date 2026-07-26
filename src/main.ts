@@ -829,7 +829,9 @@ async function startGame() {
         if (game.lives <= 0) {
           triggerMessage(game, "GAME OVER", 'game-over');
         } else if (game.generator.planetCountdown >= 0 || game.planetKilled) {
-          triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
+          game.messageTextAbove = "PLANET DESTROYED";
+          triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
+          game.messageTextBelow = "NO BONUS";
         } else {
           retryLevel(game);
         }
