@@ -704,12 +704,21 @@ export function advanceToNextLevel(state: GameState): GameState {
   });
 
   // Show modifier message on first activation of each cycle
-  if (reverseGravity && !state.reverseGravity) {
-    triggerSecondMessage(newState, "REVERSE GRAVITY", MESSAGE_DURATION);
-  } else if (invisibleLandscape && !state.invisibleLandscape) {
-    triggerSecondMessage(newState, "INVISIBLE LANDSCAPE", MESSAGE_DURATION);
+  if (state.missionNumber<15) {
+    if (reverseGravity && !state.reverseGravity) {
+      triggerSecondMessage(newState, "REVERSE GRAVITY", MESSAGE_DURATION*2);
+    } else if (invisibleLandscape && !state.invisibleLandscape) {
+      triggerSecondMessage(newState, "INVISIBLE LANDSCAPE", MESSAGE_DURATION*2);
+    } 
+  } else if (state.missionNumber==24) {
+    // In the original game, this also came with an animation of the spaceship flying left, with the stars scrolling right.
+    // This is missing from the type-script version for now.
+    triggerSecondMessage(newState, "I LOVE SPACE", MESSAGE_DURATION*2);
+  } else if (state.missionNumber==48) {
+    triggerSecondMessage(newState, "PHYSICS IS FUN", MESSAGE_DURATION*2);
+  } else if (state.missionNumber==72) {
+    triggerSecondMessage(newState, "SUPPORT HOTOL", MESSAGE_DURATION*2);
   }
-
   return newState;
 }
 
