@@ -267,7 +267,7 @@ async function startGame() {
     if (planetDestroyed) {
       game.messageTextAbove = "PLANET DESTROYED";
       if (game.lives <= 0) {
-        triggerMessage(game, "GAME OVER", "game-over");
+        triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
       } else {
         triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
         game.messageTextBelow = "NO BONUS";
@@ -426,14 +426,14 @@ async function startGame() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-      drawCenteredMessage("GAME OVER");
+      /*drawCenteredMessage("GAME OVER");
 
       // Check for any key to restart
       if (keys.size > 0) {
         keys.clear();
         resetTitleScreen(title);
         game = createGame(levels[0], 0);
-      }
+      }*/
 
       postProcessFrame(time);
       requestAnimationFrame(frame);
@@ -466,8 +466,9 @@ async function startGame() {
             game = advanceToNextLevel(game);
             break;
           case 'game-over':
-            game.gameOver = true;
-            break;
+            resetTitleScreen(title);
+            game = createGame(levels[0], 0);
+            break;            
         }
         game.pendingAction = null;
         game.messageText = null;
@@ -827,7 +828,7 @@ async function startGame() {
       } else {
         game.lives--;
         if (game.lives <= 0) {
-          triggerMessage(game, "GAME OVER", 'game-over');
+          triggerMessage(game, "GAME OVER", 'game-over', MESSAGE_DURATION * 2);
         } else if (game.generator.planetCountdown >= 0 || game.planetKilled) {
           game.messageTextAbove = "PLANET DESTROYED";
           triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
