@@ -809,13 +809,6 @@ async function startGame() {
     // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
-      if (demo.active) {
-        // Demo: orbit escape → return to title (should not happen but handle gracefully)
-        exitDemoToTitle();
-        postProcessFrame(time);
-        requestAnimationFrame(frame);
-        return;
-      }
       sounds.playEnterOrbit();
       startTeleport(game, true);
     }
