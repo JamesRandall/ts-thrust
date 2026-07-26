@@ -315,7 +315,7 @@ export function destroyPlayerShip(state: GameState): void {
   }
   state.deathSequence.timer = DEATH_TIMER_INITIAL;
   state.deathSequence.shipDestroyed = true;
-
+  state.podLineExists = false; 
   spawnExplosion(
     state.explosions,
     state.oldShipX + SHIP_EXPLOSION_X_OFFSET,
@@ -328,7 +328,7 @@ export function destroyPlayerShip(state: GameState): void {
 /** Destroy the attached pod — detaches, spawns explosion at pod position, resets death timer. */
 export function destroyAttachedPod(state: GameState): void {
   if (!state.physics.state.podAttached) return;
-
+  state.podLineExists = false; 
   if (!state.deathSequence) {
     state.deathSequence = {
       timer: DEATH_TIMER_INITIAL,
