@@ -308,6 +308,6 @@ export const levels: Level[] = [
             { x: 161, y: 920, direction: 'right' },
             { x: 190, y: 861, direction: 'left' },
         ],
-        doorConfig: { type: 'chevron', worldY: 880, threshold: 18, scanlines: 15, closedX: 192, openX: 174, innerX: 174 },
+        doorConfig: { type: 'chevron', worldY: 879, threshold: 18, scanlines: 15, closedX: 192, openX: 174, innerX: 174 },
     },
 ];
