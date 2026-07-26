@@ -196,7 +196,7 @@ function applySpawnPoint(state: GameState, spawn: SpawnPoint): void {
 export function createGame(
   level: Level,
   levelNumber: number = 0,
-  persistent?: { lives: number; score: number; missionNumber: number; reverseGravity?: boolean; invisibleLandscape?: boolean },
+  persistent?: { lives: number; score: number; fuel: number; missionNumber: number; reverseGravity?: boolean; invisibleLandscape?: boolean },
 ): GameState {
   const reverseGravity = persistent?.reverseGravity ?? false;
   const invisibleLandscape = persistent?.invisibleLandscape ?? false;
@@ -231,7 +231,7 @@ export function createGame(
       y: spawn.midpointY,
       rotation: (startAngle / 32) * Math.PI * 2,
     },
-    fuel: INITIAL_FUEL,
+    fuel: persistent?.fuel ?? INITIAL_FUEL,
     lives: persistent?.lives ?? 4,
     score: persistent?.score ?? 0,
     collisionResult: CollisionResult.None,
@@ -634,8 +634,8 @@ export function retryLevel(state: GameState): void {
   state.doorState = createDoorState();
   state.starField = createStarFieldState();
   seedStarField(state.starField, state.scroll.windowPos.x, state.level.objectColor, state.level.terrainColor);
-  state.fuel = INITIAL_FUEL;
-  state.fuelEmpty = false;
+  //state.fuel = INITIAL_FUEL;
+  //state.fuelEmpty = false;
   state.fuelTickCounter = 0;
   state.planetKilled = false;
   state.tractorBeamStarted = false;
@@ -698,6 +698,7 @@ export function advanceToNextLevel(state: GameState): GameState {
   const newState = createGame(levels[nextLevelNumber], nextLevelNumber, {
     lives: state.lives,
     score: state.score,
+    fuel: state.fuel,
     missionNumber: state.missionNumber,
     reverseGravity,
     invisibleLandscape,

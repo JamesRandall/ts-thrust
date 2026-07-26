@@ -276,7 +276,6 @@ async function startGame() {
     }
 
     // Mission incomplete and planet not destroyed - so retry.
-    //game.lives--;
     if (game.lives <= 0) {
       triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
     } else {
@@ -459,7 +458,6 @@ async function startGame() {
       sounds.stopAll();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-      console.log("game.messageText",game.messageText,"game.messageTextSecond",game.messageTextSecond)
       if (game.messageText && game.messageTimer>0) {
         drawCenteredMessages(game.messageTextAbove!=null?game.messageTextAbove:"", game.messageText, game.messageTextBelow!=null?game.messageTextBelow:"");
       } else if (game.messageTextSecond && game.messageTimerSecond>0) {
