@@ -50,6 +50,22 @@ export function createTurretFiringState(): TurretFiringState {
   };
 }
 
+export function getHostileGunShootProbability(
+  missionNumber: number,
+  planetDestroyedPenalty: number,
+): number {
+  // BBC Thrust turret aggressiveness.
+  //
+  // Missions 1-2: probability 1.
+  // Missions 3+: increases by 1 every mission.
+  // Capped at 35.
+  //
+  // A failed planet destruction attempt (planet destroyed but pod not
+  // evacuated) incurs a one-level penalty of +8.
+  const base = Math.min(35, Math.max(1, missionNumber - 1));
+  return base + planetDestroyedPenalty;
+}
+
 export function tickTurrets(
   state: TurretFiringState,
   level: Level,

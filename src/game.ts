@@ -8,6 +8,7 @@ import { ExplosionState, createExplosionState, tickExplosions, spawnExplosion } 
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
 import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 import { StarFieldState, createStarFieldState, tickStarField, seedStarField } from "./stars";
+import { getHostileGunShootProbability } from "./bullets";
 import { DoorState, createDoorState, tickDoor } from "./doors";
 import { GameInput } from "./input";
 
@@ -98,6 +99,7 @@ export interface GameState {
   scrollConfig: ScrollConfig;
   scrollAccumulator: number;
   turretFiring: TurretFiringState;
+  planetDestroyedHostileGunModifier: number;
   playerShooting: PlayerShootingState;
   destroyedTurrets: Set<number>;
   destroyedFuel: Set<number>;
@@ -241,6 +243,7 @@ export function createGame(
     scrollAccumulator: 0,
     turretFiring: createTurretFiringState(),
     playerShooting: createPlayerShootingState(),
+    planetDestroyedHostileGunModifier: 0,
     destroyedTurrets: new Set(),
     destroyedFuel: new Set(),
     explosions: createExplosionState(),
@@ -703,6 +706,8 @@ export function advanceToNextLevel(state: GameState): GameState {
     reverseGravity,
     invisibleLandscape,
   });
+  newState.turretFiring.shootProbability =  getHostileGunShootProbability(newState.missionNumber, state.planetDestroyedHostileGunModifier);
+
 
   // Show modifier message on first activation of each cycle
   if (state.missionNumber<15) {

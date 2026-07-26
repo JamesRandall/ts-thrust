@@ -266,10 +266,14 @@ async function startGame() {
 
     if (planetDestroyed) {
       game.messageTextAbove = "PLANET DESTROYED";
+      // BBC Thrust penalty:
+      // destroying the planet but failing to evacuate the pod makes
+      // hostile guns +8 more aggressive on the next mission only.
+      game.planetDestroyedHostileGunModifier = 8;
       if (game.lives <= 0) {
         triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
       } else {
-        triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
+        triggerMessage(game, "MISSION " + (game.missionNumber + 1) + " FAILED", "next-level", MESSAGE_DURATION * 2);
         game.messageTextBelow = "NO BONUS";
       }
       return;
