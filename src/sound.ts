@@ -44,12 +44,20 @@ export class ThrustSounds {
   private node!: AudioWorkletNode;
   private soundTimer = 0;
   private initialized = false;
-
+  private muted = false;
   private constructor() {}
 
   static create(): ThrustSounds {
     return new ThrustSounds();
   }
+
+  setMuted(value: boolean): void {
+    this.muted = value;
+    if (value) {
+      this.stopAll();
+    }
+  }
+
 
   private async init(): Promise<void> {
     if (this.initialized) return;
@@ -79,6 +87,7 @@ export class ThrustSounds {
   }
 
   private sendSound(name: SoundName, pitchOverride?: number): void {
+    if (this.muted) return;
     if (!this.node) return;
     const s = sounds[name];
     this.node.port.postMessage({

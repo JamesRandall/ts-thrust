@@ -624,8 +624,8 @@ async function startGame() {
       : gameInputFromKeys(keys);
 
     tick(game, dt, gameInput);
-    if (!demo.active)
-        sounds.tick();
+    sounds.setMuted(demo.active); // we don't want any sounds playing in demo mode
+    sounds.tick();
 
     // --- Demo mode: any real key exits back to title screen ---
     if (demo.active && keys.size > 0) {
