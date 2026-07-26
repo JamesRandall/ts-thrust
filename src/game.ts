@@ -119,7 +119,9 @@ export interface GameState {
   messageText: string | null;
   messageTextAbove: string | null;
   messageTextBelow: string | null;
+  messageTextSecond: string | null;
   messageTimer: number;
+  messageTimerSecond: number;
   pendingAction: PendingAction;
   teleport: TeleportAnimation | null;
   gameOver: boolean;
@@ -256,7 +258,9 @@ export function createGame(
     levelEndedFlag: false,
     escapedToOrbit: false,
     messageText: null,
+    messageTextSecond: null,
     messageTimer: 0,
+    messageTimerSecond: 0,
     pendingAction: null,
     teleport: null,
     gameOver: false,
@@ -666,6 +670,15 @@ export function triggerMessage(
   state.pendingAction = action;
 }
 
+export function triggerSecondMessage(
+  state: GameState,
+  text: string,
+  duration: number = MESSAGE_DURATION,
+): void {
+  state.messageTextSecond = text;
+  state.messageTimerSecond = duration;
+}
+
 /** Advance to next level, preserving persistent state. Toggles cycling modifiers on wrap. */
 export function advanceToNextLevel(state: GameState): GameState {
   const nextLevelNumber = (state.levelNumber + 1) % levels.length;
@@ -692,9 +705,9 @@ export function advanceToNextLevel(state: GameState): GameState {
 
   // Show modifier message on first activation of each cycle
   if (reverseGravity && !state.reverseGravity) {
-    triggerMessage(newState, "REVERSE GRAVITY", null);
+    triggerSecondMessage(newState, "REVERSE GRAVITY", MESSAGE_DURATION);
   } else if (invisibleLandscape && !state.invisibleLandscape) {
-    triggerMessage(newState, "INVISIBLE LANDSCAPE", null);
+    triggerSecondMessage(newState, "INVISIBLE LANDSCAPE", MESSAGE_DURATION);
   }
 
   return newState;

@@ -455,16 +455,22 @@ async function startGame() {
       requestAnimationFrame(frame);
       return;
     }
-    if (game.messageTimer > 0) {
+    if (game.messageTimer+game.messageTimerSecond > 0) {
       sounds.stopAll();
-      game.messageTimer--;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-      if (game.messageText) {
+      console.log("game.messageText",game.messageText,"game.messageTextSecond",game.messageTextSecond)
+      if (game.messageText && game.messageTimer>0) {
         drawCenteredMessages(game.messageTextAbove!=null?game.messageTextAbove:"", game.messageText, game.messageTextBelow!=null?game.messageTextBelow:"");
+      } else if (game.messageTextSecond && game.messageTimerSecond>0) {
+        drawCenteredMessages("", game.messageTextSecond, "");
       }
-
-      if (game.messageTimer === 0 && game.pendingAction) {
+      if (game.messageTimer>0) {
+        game.messageTimer--;
+      } else if (game.messageTimerSecond>0) {
+        game.messageTimerSecond--;
+      }
+      if (game.messageTimer === 0 && game.messageTimerSecond === 0 && game.pendingAction) {
         switch (game.pendingAction) {
           case 'retry':
             retryLevel(game);
