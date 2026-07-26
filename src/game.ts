@@ -740,7 +740,30 @@ export function addScore(state: GameState, points: number): void {
 }
 
 /** Apply mission complete bonus scoring and extra lives. */
-export function missionComplete(state: GameState): void {  // MIKE UPDATED
+export function missionComplete(state: GameState): void {  
+  /*
+  \ Mission completion bonus formula (from Thrust 6502 code):
+  \   level_number = (mission_number - 1) MOD 6
+  \   bonus = 400 * (level_number + 5) + (planet_destroyed ? 2000 : 0))
+  \
+  \ Hence:
+  \   normal completion    = 2000..4000 points
+  \   planet destroyed     = 4000..6000 points
+  \
+  \ Examples: 
+  \ (values shown as normal_bonus / planet_destroyed_bonus)
+  \   Mission  1 (level 0): 2000 / 4000
+  \   Mission  2 (level 1): 2400 / 4400
+  \   Mission  3 (level 2): 2800 / 4800
+  \   Mission  4 (level 3): 3200 / 5200
+  \   Mission  5 (level 4): 3600 / 5600
+  \   Mission  6 (level 5): 4000 / 6000
+  \   Mission  7 (level 0): 2000 / 4000
+  \   Mission  8 (level 1): 2400 / 4400
+  \   Mission  9 (level 2): 2800 / 4800
+  \   Mission 10 (level 3): 3200 / 5200
+  */
+  
   state.missionNumber++;
   let score=0;
   let loopCount = state.levelNumber + BONUS_LOOPS_BASE;
