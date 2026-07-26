@@ -93,9 +93,8 @@ function q78ToFloat(intByte: number, fracByte: number): number {
 }
 
 // Pre-compute float angle tables (indexed 0..31)
-export const ANGLE_Y = ANGLE_TO_Y_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_Y_FRAC[i]));
-export const ANGLE_X = ANGLE_TO_X_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_X_FRAC[i]));
-
+export const ANGLE_Y = ANGLE_TO_Y_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_Y_FRAC[i])); // this is [-2.5*math.cos(i/32*2*math.pi) for i in range(32)]
+export const ANGLE_X = ANGLE_TO_X_INT.map((v, i) => q78ToFloat(v, ANGLE_TO_X_FRAC[i])); // this is [1.25*math.sin(i/32*2*math.pi) for i in range(32)]
 // ---------------------------------------------------------------------------
 // Per-level gravity (fractional byte, INT is always 0)
 // From level_gravity_FRAC_table: $05,$07,$09,$0B,$0C,$0D
@@ -407,9 +406,23 @@ export class ThrustPhysics {
   // -----------------------------------------------------------------------
 
   private calculateTetherDelta(): { dx: number; dy: number } {
+    // The purpose of this code is to convert a tether angle and length into a vector (dx, dy).
+    // The vector (dx,dy) is a displacement from the centre of the tether to the spaceship.
+    // Hence the full thether is double length of this vector.
+    // Note that tetherAngles are represented by an integer part and a fraction part: pod.angleShipToPod and pod.angleFrac respectively.
+    // The code approximates the result (dx=1.25*Math.sin(ang)*(tetherIndex+2)/4, dy=-2.5*Math.cos(ang)*(tetherIndex+2)/4), 
+    // As the sin/cos tables stored in ANGLE_TO_Y_INT, ANGLE_TO_Y_FRAC, ANGLE_TO_X_INT, ANGLE_TO_X_FRAC 
+    // are each only 32 entries wide, we need to use linear interpolation to estimate the fractional parts.  
+    // Note that tetherIndex specifies the length of the length of the returned vector. Length=(pod.tetherIndex+2)/4
+    // TetherIndex defaults to 14.  So the default length of the returned vetctor is (14+2)/4=4.  
+    // But note that the tether contracts in length during explosions, hence tetherIndex will be less than 14 
+    // on some calls to this function.
+  
     const pod = this.state.pod;
+    let ang=q78ToFloat(pod.angleShipToPod, pod.angleFrac)/32*Math.PI*2;
+    return {dx: 1.25*Math.sin(ang)*(pod.tetherIndex+2)/4, dy: -2.5*Math.cos(ang)*(pod.tetherIndex+2)/4};
 
-    // Replicate calculate_attached_pod_vector from the 6502 source.
+    /*// Replicate calculate_attached_pod_vector from the 6502 source.
     //
     // angleFrac accumulates floating-point angularVelocity for sub-step
     // precision, but the tether calculation must use a clean integer byte
@@ -438,7 +451,7 @@ export class ThrustPhysics {
     }
 
     // Arithmetic shift right by 2 (sign-preserving divide by 4)
-    return { dx: dxAcc / 4, dy: dyAcc / 4 };
+    return { dx: dxAcc / 4, dy: dyAcc / 4 };*/
   }
 
   // -----------------------------------------------------------------------
@@ -468,6 +481,7 @@ export class ThrustPhysics {
   // -----------------------------------------------------------------------
 
   attachPod(podWorldX: number, podWorldY: number): void {
+    // .attach_pod_to_ship in 6502 code
     const s = this.state;
 
     // Compute the actual midpoint (used as the search target)
@@ -486,7 +500,7 @@ export class ThrustPhysics {
     s.pod.angleShipToPod = 0;
     s.pod.angleFrac = 0;
 
-    let stepHi = ANGLE_SEARCH_STEP_INT_INITIAL;
+    /*let stepHi = ANGLE_SEARCH_STEP_INT_INITIAL;
     let stepLo = ANGLE_SEARCH_STEP_FRAC_INITIAL;
 
     for (let pass = 0; pass < ANGLE_SEARCH_PASSES; pass++) {
@@ -527,7 +541,22 @@ export class ThrustPhysics {
         s.pod.angleFrac = newFrac & BYTE_MASK;
         s.pod.angleShipToPod = (s.pod.angleShipToPod - stepHi) & ANGLE_MASK;
       }
-    }
+    }*/
+    // fast direct atan2 method
+    let tx=targetDx/1.25;
+    let ty=targetDy/-2.5;
+    let angleFloat=(Math.atan2(tx,ty)/(2*Math.PI)*32);
+    if (angleFloat<0) angleFloat+=32;
+
+    // Extract coarse/fine components
+    const angleIdx = Math.floor(angleFloat) & 31;
+    const frac = angleFloat - angleIdx;
+    const angleFrac = Math.floor(frac * 256) & 0xFF;
+
+    // Store into pod state
+    s.pod.angleShipToPod = angleIdx;
+    s.pod.angleFrac = angleFrac;
+
 
     // Now we have the best angle. The tether half-length varies by angle
     // (5–10 units), so placing midpoint at (ship+pod)/2 causes a snap
@@ -543,7 +572,15 @@ export class ThrustPhysics {
     s.forceX /= 2;
     s.forceY /= 2;
     s.pod.angularVelocity = 0;
-
+    
+    // new code (was missing from typescript, but present in 6502):
+    
+    // Initial angular velocity from cross‑product (6502 equivalent)
+    // Note that s.forceX and s.forceY should really be called s.vx and s.vy
+    const angularVelocity =
+      (s.forceY * targetDx) -
+      (s.forceX * targetDy);
+    s.pod.angularVelocity = angularVelocity;
     this.derivePositions();
   }
 
