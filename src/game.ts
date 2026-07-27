@@ -109,6 +109,7 @@ export interface GameState {
   planetKilled: boolean;
   tractorBeamStarted: boolean;
   podLineExists: boolean;
+  podAttachedThisTick: boolean;
   fuelTickCounter: number;
   fuelEmpty: boolean;
   levelNumber: number;
@@ -137,21 +138,28 @@ function selectSpawnPoint(
 ): { spawnPoint: SpawnPoint; respawnWithPod: boolean } {
   const points = level.spawnPoints;
   let selectedIndex = 0;
+  let respawnWithPod = hasPod;
 
   for (let i = 0; i < points.length; i++) {
     if (points[i].midpointY >= currentMidpointY) {
       selectedIndex = i;
       break;
     }
+
     if (i === points.length - 1) {
       selectedIndex = i;
+
+      // Matches the 6502's special handling of the deepest checkpoint:
+      // lose the pod when respawning here.
+      respawnWithPod = false;
     }
   }
 
-  let respawnWithPod = false;
-  if (hasPod && selectedIndex > 0) {
+  // 6502 DEY logic
+  if (!hasPod && selectedIndex > 0) {
+    // on way down tunnels (i.e. without pod), we don't progress to the next waypoint
+    // until we've definitely gone right past it.  Hence move back one way point:
     selectedIndex--;
-    respawnWithPod = true;
   }
 
   return {
@@ -194,6 +202,7 @@ export function createGame(
     x: spawn.midpointX,
     y: spawn.midpointY,
     angle: startAngle,
+    level: levelNumber,
     reverseGravity,
   });
 
@@ -237,6 +246,7 @@ export function createGame(
     planetKilled: false,
     tractorBeamStarted: false,
     podLineExists: false,
+    podAttachedThisTick: false,
     fuelTickCounter: 0,
     fuelEmpty: false,
     levelNumber,
@@ -384,6 +394,8 @@ function tractorDistance(
 }
 
 export function tick(state: GameState, dt: number, gameInput: GameInput): void {
+  state.podAttachedThisTick = false;
+
   // Planet explosion animation runs at 50Hz (BBC Micro vsync rate)
   state.planetExplodeAccumulator += dt;
   while (state.planetExplodeAccumulator >= VSYNC_STEP_S) {
@@ -548,6 +560,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
             const podWorldY = state.level.podPedestal.y + 4 / WORLD_SCALE_Y;
             state.physics.attachPod(podWorldX, podWorldY);
             state.podLineExists = true;
+            state.podAttachedThisTick = true;
           }
           // Dead zone ($75-$83): no change
         }
@@ -623,6 +636,7 @@ export function retryLevel(state: GameState): void {
   state.planetKilled = false;
   state.tractorBeamStarted = false;
   state.podLineExists = false;
+  state.podAttachedThisTick = false;
   state.levelEndedFlag = false;
   state.escapedToOrbit = false;
   state.messageText = null;
