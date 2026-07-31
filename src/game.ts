@@ -624,6 +624,8 @@ export function retryLevel(state: GameState): void {
     state.physics.state.pod.angleFrac = 0;
     state.physics.state.pod.angularVelocity = 0;
     state.physics.state.pod.tetherIndex = 15;
+
+    state.physics.derivePositions(); // <-- likely missing step
   }
 
   state.scroll.scrollSpeed.x = 0;
