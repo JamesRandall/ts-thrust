@@ -526,7 +526,6 @@ async function startGame() {
       if (game.teleport.step >= 12) {
         // Animation complete
         const wasDisappearing = game.teleport.isDisappearing;
-        game.teleport = null;
         if (wasDisappearing) {
           // During demo: orbit escape returns to title instead of normal logic
           if (demo.active) {
@@ -538,6 +537,7 @@ async function startGame() {
           processOrbitEscape();
         }
         renderScene();
+        game.teleport = null;
       } else {
         // Calculate size: expand 1→6, contract 6→1
         const step = game.teleport.step;
