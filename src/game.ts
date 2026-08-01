@@ -481,7 +481,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
 
     updateScroll(
         { x: state.physics.state.shipX, y: state.physics.state.shipY },
-        { x: state.physics.state.forceX, y: state.physics.state.forceY },
+        { x: state.physics.state.velocityX, y: state.physics.state.velocityY },
         state.scroll,
         state.scrollConfig,
     );
@@ -508,8 +508,8 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
         state.physics.state.angle,
         state.player.x,
         state.player.y,
-        state.physics.state.forceX,
-        state.physics.state.forceY,
+        state.physics.state.velocityX,
+        state.physics.state.velocityY,
     );
 
     tickPlayerBullets(state.playerShooting);
@@ -594,7 +594,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
   if (!scrollUpdated) {
     updateScroll(
         { x: state.physics.state.shipX, y: state.physics.state.shipY },
-        { x: state.physics.state.forceX, y: state.physics.state.forceY },
+        { x: state.physics.state.velocityX, y: state.physics.state.velocityY },
         state.scroll,
         state.scrollConfig,
     );

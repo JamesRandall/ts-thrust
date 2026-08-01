@@ -197,8 +197,8 @@ export interface ThrustState {
   /** Current angle index (0-31), always integer */
   angle: number;
   /** Accumulated force vector */
-  forceX: number;
-  forceY: number;
+  velocityX: number;
+  velocityY: number;
 
   /** True when the pod is attached to the ship */
   podAttached: boolean;
@@ -248,8 +248,8 @@ export class ThrustPhysics {
       vx: 0,
       vy: 0,
       angle: 0,
-      forceX: 0,
-      forceY: 0,
+      velocityX: 0,
+      velocityY: 0,
       podAttached: false,
       pod: {
         angleShipToPod: 0,
@@ -331,14 +331,14 @@ export class ThrustPhysics {
       const angleIdx = s.angle & ANGLE_MASK;
 
       // Gravity
-      s.forceY += this.gravity;
+      s.velocityY += this.gravity;
 
       // Thrust
       if (input.thrust) {
         const thrustY = ANGLE_Y[angleIdx] / (1 << this.massShift);
         const thrustX = ANGLE_X[angleIdx] / (1 << this.massShift);
-        s.forceY += thrustY;
-        s.forceX += thrustX;
+        s.velocityY += thrustY;
+        s.velocityX += thrustX;
       }
 
       // Torque (pod attached + thrusting + not a skip slot)
@@ -352,15 +352,15 @@ export class ThrustPhysics {
       }
 
       // Linear drag
-      s.forceX *= DRAG_X_PER_STEP;
-      s.forceY *= DRAG_Y_PER_STEP;
+      s.velocityX *= DRAG_X_PER_STEP;
+      s.velocityY *= DRAG_Y_PER_STEP;
     }
 
     // --- Step 2: Position integration (every tick, both solo and attached) ---
-    s.vx = s.forceX;
-    s.vy = s.forceY;
-    s.x += s.forceX;
-    s.y += s.forceY;
+    s.vx = s.velocityX;
+    s.vy = s.velocityY;
+    s.x += s.velocityX;
+    s.y += s.velocityY;
 
     // Angular velocity integration (every tick, pod attached only)
     if (s.podAttached) {
@@ -569,17 +569,17 @@ export class ThrustPhysics {
     s.y = s.shipY - dy;
 
     // Halve forces (arithmetic shift right — matches original)
-    s.forceX /= 2;
-    s.forceY /= 2;
+    s.velocityX /= 2;
+    s.velocityY /= 2;
     s.pod.angularVelocity = 0;
     
     // new code (was missing from typescript, but present in 6502):
     
     // Initial angular velocity from cross‑product (6502 equivalent)
-    // Note that s.forceX and s.forceY should really be called s.vx and s.vy
+    // Note that s.velocityX and s.velocityY should really be called s.vx and s.vy
     const angularVelocity =
-      (s.forceY * targetDx) -
-      (s.forceX * targetDy);
+      (s.velocityY * targetDx) -
+      (s.velocityX * targetDy);
     s.pod.angularVelocity = angularVelocity;
     this.derivePositions();
   }
@@ -604,8 +604,8 @@ export class ThrustPhysics {
   resetMotion(): void {
     this.state.vx = 0;
     this.state.vy = 0;
-    this.state.forceX = 0;
-    this.state.forceY = 0;
+    this.state.velocityX = 0;
+    this.state.velocityY = 0;
     this.state.pod.angularVelocity = 0;
     this.state.pod.angleFrac = 0;
     this.accumulator = 0;
