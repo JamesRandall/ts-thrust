@@ -284,14 +284,17 @@ export function createGame(
 
 /** Compute and freeze screen positions for the teleport animation. */
 export function startTeleport(state: GameState, isDisappearing: boolean): void {
+  const hasPod = state.physics.state.podAttached;
+
   const camX = Math.round(state.scroll.windowPos.x * WORLD_SCALE_X);
   const camY = Math.round(state.scroll.windowPos.y * WORLD_SCALE_Y);
 
-  const shipCX = Math.round(state.player.x * WORLD_SCALE_X - camX);
-  const shipCY = Math.round(state.player.y * WORLD_SCALE_Y - camY);
+  const shipWorldX = hasPod ? state.physics.state.shipX : state.player.x;
+  const shipWorldY = hasPod ? state.physics.state.shipY : state.player.y;
+  const shipCX = Math.round(shipWorldX * WORLD_SCALE_X - camX);
+  const shipCY = Math.round(shipWorldY * WORLD_SCALE_Y - camY);
 
   let podCX = 0, podCY = 0;
-  const hasPod = state.physics.state.podAttached;
   if (hasPod) {
     podCX = Math.round(state.physics.state.podX * WORLD_SCALE_X - camX);
     podCY = Math.round(state.physics.state.podY * WORLD_SCALE_Y - camY);
@@ -625,7 +628,9 @@ export function retryLevel(state: GameState): void {
     state.physics.state.pod.angularVelocity = 0;
     state.physics.state.pod.tetherIndex = 15;
 
-    state.physics.derivePositions(); // <-- likely missing step
+    state.physics.derivePositions(); 
+    state.player.x = state.physics.state.shipX;
+    state.player.y = state.physics.state.shipY;
   }
 
   state.scroll.scrollSpeed.x = 0;
