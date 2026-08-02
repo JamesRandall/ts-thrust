@@ -1,4 +1,4 @@
-import {renderLevel, drawStatusBar, drawText, drawRemappedSprite, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
+import {renderLevel, drawStatusBar, drawText, drawRemappedSprite, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y, toScreenX} from "./rendering";
 import {loadShipSprites, loadSprite, loadTurretSprites, loadSwitchSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
 import powerPlantPng from "./sprites/powerPlant.png";
@@ -194,7 +194,8 @@ async function startGame() {
         podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
       } else {
-        podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
+        //podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
+        podCX = toScreenX(game.level.podPedestal.x, camX)+Math.floor(podStandSprite.width / 2);
         podCY = Math.round(game.level.podPedestal.y * WORLD_SCALE_Y - camY - 1 + Math.floor(podSprite.height / 2));
       }
 

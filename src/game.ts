@@ -2,7 +2,7 @@ import { Level, SpawnPoint, levels } from "./levels";
 import { ThrustPhysics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
-import { WORLD_SCALE_X, WORLD_SCALE_Y, bbcMicroColours } from "./rendering";
+import { WORLD_SCALE_X, WORLD_SCALE_Y, bbcMicroColours, WORLD_WIDTH, toScreenX } from "./rendering";
 import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
 import { ExplosionState, createExplosionState, tickExplosions, spawnExplosion } from "./explosions";
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
@@ -407,6 +407,7 @@ function tractorDistance(
   return d > 255 ? 255 : d;
 }
 
+
 export function tick(state: GameState, dt: number, gameInput: GameInput): void {
   // Planet explosion animation runs at 50Hz (BBC Micro vsync rate)
   state.planetExplodeAccumulator += dt;
@@ -555,22 +556,28 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
         // Pod circle (11x11) sits at the top — center at pixel (5, 5) from sprite origin
         const shipSX = state.player.x * WORLD_SCALE_X - camX;
         const shipSY = state.player.y * WORLD_SCALE_Y - camY;
-        const podSX = state.level.podPedestal.x * WORLD_SCALE_X - camX + 5;
+        //const podSX = state.level.podPedestal.x * WORLD_SCALE_X - camX + 5;
+        const podSX = toScreenX(state.level.podPedestal.x, camX)+5;
         const podSY = state.level.podPedestal.y * WORLD_SCALE_Y - camY + 4;
 
         // Pod must be on screen
         if (podSX >= 0 && podSX < 320 && podSY >= 0 && podSY < 256) {
-          const dist = tractorDistance(shipSX, shipSY, podSX, podSY);
 
+          const dist = tractorDistance(shipSX, shipSY, podSX, podSY);
           if (dist < TRACTOR_BEAM_START_DISTANCE) {
             // Close zone: start beam
             state.tractorBeamStarted = true;
             state.podLineExists = true;
           } else if (dist >= TRACTOR_ATTACH_DISTANCE && state.tractorBeamStarted) {
             // Far zone + beam started: attach pod at circle center
+            // Use the nearest wrapped copy of the pod so the initial tether
+            // angle is correct even after multiple world wraps.
+            const worldWidth = WORLD_WIDTH / WORLD_SCALE_X;
             const podWorldX = state.level.podPedestal.x + 5 / WORLD_SCALE_X;
+            const podWorldXWrapped = podWorldX + Math.round((state.player.x - podWorldX) / worldWidth) * worldWidth;
             const podWorldY = state.level.podPedestal.y + 4 / WORLD_SCALE_Y;
-            state.physics.attachPod(podWorldX, podWorldY);
+            state.physics.attachPod(podWorldXWrapped, podWorldY);
+            state.podLineExists = true;
             state.podLineExists = true;
             state.podCollectedThisTick = true;
           }
