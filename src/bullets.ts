@@ -1,7 +1,8 @@
 import { ANGLE_X, ANGLE_Y } from "./physics";
 import { Level } from "./levels";
-import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
+import { WORLD_SCALE_X, WORLD_SCALE_Y, toScreenX } from "./rendering";
 import { SpriteMask } from "./shipSprites";
+import { EXTRA_BORDER_BUFFER } from "./collision";
 
 export interface Bullet {
   x: number;
@@ -162,8 +163,8 @@ export function removeCollidingBullets(
   const { data, width, height } = imageData;
 
   state.bullets = state.bullets.filter(bullet => {
-    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
-    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX)+EXTRA_BORDER_BUFFER;
+    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY)+EXTRA_BORDER_BUFFER;
     for (let px = 0; px < 2; px++) {
       for (let py = 0; py < 2; py++) {
         const x = bx + px;
@@ -332,8 +333,8 @@ export function processPlayerBulletCollisions(
 
   for (const bullet of state.bullets) {
     if (!bullet.active) continue;
-    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
-    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX)+EXTRA_BORDER_BUFFER;
+    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY)+EXTRA_BORDER_BUFFER;
 
     let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' = 'none';
 

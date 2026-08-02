@@ -2,6 +2,11 @@ import { Level, SwitchPosition } from "./levels";
 import { fillPolygon, Point, bbcMicroColours, WORLD_SCALE_X, WORLD_SCALE_Y, WORLD_WIDTH } from "./rendering";
 import { SpriteMask, TurretSprites, SwitchSprites } from "./shipSprites";
 
+export const EXTRA_BORDER_BUFFER = 200; // This makes the collision canvas 
+// larger than the display canvas by this amount in all directions.  The purpose
+// is to allow the player to shoot enemy guns which are just off screen.
+
+
 export enum CollisionResult {
   None       = 0,
   Terrain    = 1,
@@ -24,10 +29,10 @@ const TERRAIN_COLLISION_COLOUR = "#0000ff";
 
 export function createCollisionBuffer(width: number, height: number): CollisionBuffer {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width+EXTRA_BORDER_BUFFER*2;
+  canvas.height = height+EXTRA_BORDER_BUFFER*2;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  return { canvas, ctx, width, height };
+  return { canvas, ctx, width: canvas.width, height: canvas.height };
 }
 
 export function renderCollisionBuffer(
@@ -49,8 +54,8 @@ export function renderCollisionBuffer(
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
 
-  const wx = (x: number) => x * WORLD_SCALE_X;
-  const wy = (y: number) => y * WORLD_SCALE_Y;
+  const wx = (x: number) => x * WORLD_SCALE_X+EXTRA_BORDER_BUFFER;
+  const wy = (y: number) => y * WORLD_SCALE_Y+EXTRA_BORDER_BUFFER;
 
   // Terrain polygons at three offsets to handle wrapping.
   // Offsets are dynamic so collision stays correct beyond one world-width.
@@ -69,17 +74,17 @@ export function renderCollisionBuffer(
   // Door polygon (terrain collision) at wrapping offsets
   if (doorPolygon) {
     for (const offset of offsets) {
-      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset, y: p.y }));
+      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset+ EXTRA_BORDER_BUFFER, y: p.y+ EXTRA_BORDER_BUFFER }));
       fillPolygon(ctx, offsetPoints, TERRAIN_COLLISION_COLOUR, Math.round(camY));
     }
   }
 
   // Objects (with wrapping)
   const toScreenX = (worldX: number) => {
-    let sx = wx(worldX) - camX;
+    let sx = wx(worldX) - camX - EXTRA_BORDER_BUFFER;
     while (sx < -WORLD_WIDTH / 2) sx += WORLD_WIDTH;
     while (sx > WORLD_WIDTH / 2) sx -= WORLD_WIDTH;
-    return sx;
+    return sx+EXTRA_BORDER_BUFFER;
   };
 
   const drawMarker = (ox: number, oy: number, colour: string) => {
@@ -153,6 +158,8 @@ export function renderCollisionBuffer(
 
 /** Test a single screen pixel against the collision buffer image data. */
 function testPixelCollision(data: Uint8ClampedArray, width: number, height: number, px: number, py: number): boolean {
+  px+=EXTRA_BORDER_BUFFER;
+  py+=EXTRA_BORDER_BUFFER;
   if (px < 0 || px >= width || py < 0 || py >= height) return false;
   const idx = (py * width + px) * 4;
   return data[idx] + data[idx + 1] + data[idx + 2] > 0;
@@ -209,8 +216,8 @@ export function testCollision(
   let result = CollisionResult.None;
 
   for (const { dx, dy } of mask) {
-    const px = shipScreenX + dx;
-    const py = shipScreenY + dy;
+    const px = shipScreenX + dx + EXTRA_BORDER_BUFFER;
+    const py = shipScreenY + dy + EXTRA_BORDER_BUFFER;
 
     if (px < 0 || px >= width || py < 0 || py >= height) continue;
 
