@@ -144,8 +144,7 @@ async function startGame() {
   function renderScene(hideShip?: boolean, landscapeRevealed?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
-    const podDetached = game.physics.state.podAttached;
-
+    const podDetached = game.physics.state.podAttached || (game.deathSequence?.hadPodAtDeath ?? false);
     // Hide ship when destroyed in death sequence
     const shouldHideShip = hideShip || game.deathSequence?.shipDestroyed;
 
