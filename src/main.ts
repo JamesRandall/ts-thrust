@@ -596,7 +596,7 @@ async function startGame() {
       for (let i = 0; i < levels.length; i++) {
         if (keys.has(`Digit${i + 1}`)) {
           sounds.stopAll();
-          game = createGame(levels[i], i);
+          game = createGame(levels[i], i, {missionNumber:i});
           keys.delete(`Digit${i + 1}`);
           break;
         }
@@ -613,7 +613,7 @@ async function startGame() {
         game = createGame(levels[game.levelNumber], game.levelNumber, {
           lives: game.lives,
           score: game.score,
-          missionNumber: game.missionNumber,
+          missionNumber: game.levelNumber+(reverseGravity?6:0)+(invisibleLandscape?12:0),
           reverseGravity,
           invisibleLandscape,
         });

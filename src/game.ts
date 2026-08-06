@@ -278,6 +278,8 @@ export function createGame(
     planetExplodeAccumulator: 0,
     frameCounter: 0,
   };
+  state.turretFiring.shootProbability =  getHostileGunShootProbability(state.missionNumber, state.planetDestroyedHostileGunModifier);
+
   startTeleport(state, false);
   return state;
 }
@@ -726,7 +728,7 @@ export function advanceToNextLevel(state: GameState): GameState {
   newState.extraLifeThisTick=state.extraLifeThisTick;
 
   // Show modifier message on first activation of each cycle
-  if (state.missionNumber<15) {
+  if (state.missionNumber<=12) {
     if (reverseGravity && !state.reverseGravity) {
       triggerSecondMessage(newState, "REVERSE GRAVITY", MESSAGE_DURATION*2);
     } else if (invisibleLandscape && !state.invisibleLandscape) {
