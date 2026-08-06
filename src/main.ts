@@ -699,7 +699,7 @@ async function startGame() {
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
     // Remove pod stand from collision buffer as soon as tractor beam starts (or pod attached)
-    const podRemovedFromCollision = podDetached || game.tractorBeamStarted;
+    const podRemovedFromCollision = podDetached;// || game.tractorBeamStarted;
     const doorPolyCollision = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
     renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podRemovedFromCollision, switchSprites, doorPolyCollision);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
