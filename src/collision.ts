@@ -14,6 +14,7 @@ export enum CollisionResult {
   Turret     = 3,
   PowerPlant = 4,
   Pod        = 5,
+  Switch     = 6,
 }
 
 export interface CollisionBuffer {
@@ -228,8 +229,8 @@ export function testCollision(
 
     if (r + g + b === 0) continue;
 
-    // Green (0,255,0) = switch sentinel — ship passes through, no collision
-    if (r === 0 && g === 255 && b === 0) continue;
+    //// Green (0,255,0) = switch sentinel — ship passes through, no collision
+    //if (r === 0 && g === 255 && b === 0) continue;
 
     // Identify what was hit — higher-priority results override lower
     let hit: CollisionResult;
@@ -243,6 +244,8 @@ export function testCollision(
       hit = CollisionResult.Pod;
     } else if (r === 255 && g === 0 && b === 255) {
       hit = CollisionResult.Fuel;
+    } else if (r === 0 && g === 255 && b === 0) {
+      hit = CollisionResult.Switch;
     } else {
       hit = CollisionResult.Terrain; // unknown colour — treat as terrain
     }
