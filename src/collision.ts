@@ -45,12 +45,14 @@ export function renderCollisionBuffer(
   turretSprites?: TurretSprites,
   powerPlantSprite?: ImageBitmap,
   podStandSprite?: ImageBitmap,
+  podSprite?: ImageBitmap,
   destroyedTurrets?: Set<number>,
   destroyedFuel?: Set<number>,
   generatorDestroyed?: boolean,
-  podDetached?: boolean,
+  podDetachedFromStand?: boolean,
   switchSprites?: SwitchSprites,
   doorPolygon?: Point[] | null,
+  podX: number, podY: number,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
@@ -105,7 +107,7 @@ export function renderCollisionBuffer(
       drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
     }
   }
-  if (!podDetached) {
+  if (!podDetachedFromStand) {
     if (podStandSprite) {
       const sx = Math.round(toScreenX(level.podPedestal.x));
       const sy = Math.round(wy(level.podPedestal.y) - camY);
@@ -114,7 +116,13 @@ export function renderCollisionBuffer(
     } else {
       drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
     }
-  }
+  } else {
+    // pod is picked up.  Draw pod.  Need to enable collision detection for player bullets into own pod.
+    const sx = Math.round(toScreenX(podX));
+    const sy = Math.round(wy(podY) - camY);
+    ctx.fillStyle = bbcMicroColours.white;
+    ctx.fillRect(sx, sy - 1, podSprite.width-1, podSprite.height-1);
+  }  
   for (let i = 0; i < level.fuel.length; i++) {
     if (destroyedFuel?.has(i)) continue;
     const f = level.fuel[i];

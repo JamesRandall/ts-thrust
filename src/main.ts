@@ -699,9 +699,9 @@ async function startGame() {
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
     // Remove pod stand from collision buffer as soon as tractor beam starts (or pod attached)
-    const podRemovedFromCollision = podDetached;// || game.tractorBeamStarted;
+    const podStandRemovedFromCollision = podDetached;// || game.tractorBeamStarted;
     const doorPolyCollision = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podRemovedFromCollision, switchSprites, doorPolyCollision);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, podSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podStandRemovedFromCollision, switchSprites, doorPolyCollision, game.physics.state.podX,game.physics.state.podY);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
 
     // Remove bullets that hit terrain/objects
@@ -741,6 +741,12 @@ async function startGame() {
       spawnExplosion(game.explosions, bulletHits.switchHitX, bulletHits.switchHitY, bbcMicroColours.yellow);
       sounds.playExplosion();
     }
+    if (bulletHits.hitPod && game.physics.state.podAttached && !game.deathSequence) {
+      // player accidentally shot own pod while attached
+      destroyAttachedPod(game);
+      sounds.playExplosion();
+    }
+
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const center = shipCenters[spriteIdx];
@@ -765,17 +771,19 @@ async function startGame() {
         const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
         const collisionPod = testCollision(collisionBuf, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y);
-        if (collisionPod !== CollisionResult.None) {
+        if (collisionPod !== CollisionResult.None && collisionPod !== CollisionResult.Pod && !game.deathSequence) {
           destroyAttachedPod(game);
           sounds.playExplosion();
         }
 
         /*// Test tether line
+        // removed this code because BBC-Micro game did not check the tethher line collisions.
         if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
           destroyAttachedPod(game);
           sounds.playExplosion();
         }
         // Test pod sprite area
+        // removed this check, replaced it by sprite mask check above, with call to testCollision, which should be more accurate than rectangle overlap check.
         else {
           const podLeft = podCX - Math.floor(podSprite.width / 2);
           const podTop = podCY - Math.floor(podSprite.height / 2);
@@ -788,7 +796,7 @@ async function startGame() {
 
       // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
       const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
-      if (bulletHitShip && !game.shieldActive) {
+      if (bulletHitShip && !game.shieldActive && !game.deathSequence) {
         destroyPlayerShip(game);
         sounds.playExplosion();
       } else if (collision === CollisionResult.None && game.physics.state.podAttached) {
@@ -796,7 +804,7 @@ async function startGame() {
         const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
         const bulletHitPod = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y, camX, camY);
-        if (bulletHitPod) {
+        if (bulletHitPod && !game.deathSequence) {
           destroyAttachedPod(game);
           sounds.playExplosion();
         }

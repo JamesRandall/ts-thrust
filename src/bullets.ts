@@ -311,6 +311,7 @@ export interface BulletHitResult {
   hitTurrets: number[];
   hitFuel: number[];
   hitGenerator: boolean;
+  hitPod: boolean;
   generatorHitX: number;
   generatorHitY: number;
   hitSwitch: boolean;
@@ -336,7 +337,7 @@ export function processPlayerBulletCollisions(
     const bx = Math.round(bullet.x * WORLD_SCALE_X - camX)+EXTRA_BORDER_BUFFER;
     const by = Math.round(bullet.y * WORLD_SCALE_Y - camY)+EXTRA_BORDER_BUFFER;
 
-    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' = 'none';
+    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' | 'pod' = 'none';
 
     for (let px = 0; px < 2 && hitColor === 'none'; px++) {
       for (let py = 0; py < 2 && hitColor === 'none'; py++) {
@@ -353,6 +354,7 @@ export function processPlayerBulletCollisions(
         else if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
         else if (r === 255 && g === 0 && b === 255) { hitColor = 'fuel'; }
         else if (r === 0 && g === 255 && b === 255) { hitColor = 'generator'; }
+        else if (r === 255 && g === 255 && b === 255) { hitColor = 'pod'; }
         else { hitColor = 'terrain'; }
       }
     }
@@ -392,6 +394,8 @@ export function processPlayerBulletCollisions(
       result.hitGenerator = true;
       result.generatorHitX = bullet.x;
       result.generatorHitY = bullet.y;
+    } else if (hitColor === 'pod') {
+      result.hitPod = true;
     }
   }
 
