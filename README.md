@@ -1,5 +1,7 @@
 # Thrust
 
+[Play online here](https://www.jamesdrandall.com/thrust/)
+
 A TypeScript recreation of **Thrust** (BBC Micro, 1986) by **Jeremy C. Smith**, built with HTML5 Canvas and Vite.
 
 Thrust is a gravity/inertia game where you pilot a ship through caverns, collecting fuel, avoiding turret fire, and retrieving a pod from deep underground — all while fighting gravity and momentum.

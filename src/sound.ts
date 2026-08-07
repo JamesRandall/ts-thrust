@@ -45,6 +45,7 @@ export class ThrustSounds {
   private soundTimer = 0;
   private initialized = false;
   private muted = false;
+
   private constructor() {}
 
   static create(): ThrustSounds {
@@ -86,9 +87,13 @@ export class ThrustSounds {
     if (this.soundTimer > 0) this.soundTimer--;
   }
 
+  /** The original game plays no sound during demo mode. */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+  }
+
   private sendSound(name: SoundName, pitchOverride?: number): void {
-    if (this.muted) return;
-    if (!this.node) return;
+    if (!this.node || this.muted) return;
     const s = sounds[name];
     this.node.port.postMessage({
       type: 'osword7',

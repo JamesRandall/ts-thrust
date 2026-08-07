@@ -575,6 +575,14 @@ async function startGame() {
       return;
     }
 
+    // Escape aborts the game (as in the original) — disabled during demo
+    if (!demo.active && keys.has("Escape")) {
+      keys.delete("Escape");
+      paused = false;
+      sounds.stopAll();
+      game.gameOver = true;
+    }
+
     // Pause toggle (disabled during demo)
     if (!demo.active && keys.has("KeyP")) {
       paused = !paused;
@@ -639,6 +647,9 @@ async function startGame() {
       ? getDemoInput(demo)
       : gameInputFromKeys(keys);
 
+    // The original game plays no sound during demo mode
+    sounds.setMuted(demo.active);
+
     tick(game, dt, gameInput);
     sounds.setMuted(demo.active); // we don't want any sounds playing in demo mode
     sounds.tick();
@@ -684,9 +695,10 @@ async function startGame() {
       game.extraLifeThisTick=false;
     }
 
-    if (game.podCollectedThisTick) {
+
+    // Pod picked up by tractor beam — double-ping, as in the original
+    if (game.podAttachedThisTick) {
       sounds.playCollect();
-      game.podCollectedThisTick=false;
     }
 
     // Countdown beep

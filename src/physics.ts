@@ -427,8 +427,11 @@ export class ThrustPhysics {
     // angleFrac accumulates floating-point angularVelocity for sub-step
     // precision, but the tether calculation must use a clean integer byte
     // so that carry and top-nibble are consistent (matching the original
-    // 8-bit register behaviour).
-    const frac = pod.angleFrac & BYTE_MASK; // Fix 2026-07 mikefairbank. Truncate, don’t round
+    // 8-bit register behaviour). Truncate, don't round — rounding could
+    // shift the value into the next nibble too early or too late, changing
+    // both the carry into the main angle and the top-nibble comparison,
+    // producing a visibly wrong tether angle for a frame.
+    const frac = pod.angleFrac & BYTE_MASK;
     const fracPlusEight = frac + 8;
     const carry = fracPlusEight > 0xFF ? 1 : 0;
     const topNibble = fracPlusEight & HIGH_NIBBLE_MASK;
@@ -438,10 +441,17 @@ export class ThrustPhysics {
     let dxAcc = ANGLE_X[y];
     let dyAcc = ANGLE_Y[y];
 
-    // Loop from top_nibble_index down to 0 (inclusive), accumulating
-    // angle table entries. The angle index Y only advances when the
-    // top nibble of the fractional accumulator matches the lookup table
-    // entry — this creates the elliptical tether shape.
+    // Accumulate 16 samples of ANGLE_X[y] and ANGLE_Y[y] to reproduce the 6502's
+    // linear interpolation between consecutive angle-table entries. This enables
+    // the tetherDelta vector to be at more angles than just the 32 angles stored
+    // in the tables. The tractor beam would not move smoothly with just 32
+    // possible angles for it — so we need linear interpolation to get more than
+    // 32 angles. The following loop performs that interpolation.
+    // The fractional byte (topNibble) determines exactly one iteration where the
+    // angle index y is incremented, resulting in N additions of ANGLE_*[y]
+    // followed by (16-N) additions of ANGLE_*[y+1]. This produces the correct
+    // weighted blend based on pod.angleFrac without using multiplication,
+    // matching the original 8-bit behaviour.
     for (let x = pod.tetherIndex; x >= 0; x--) {
       if (topNibble === LOOKUP_TOP_NIBBLE[x]) {
         y = (y + 1) & ANGLE_MASK;
