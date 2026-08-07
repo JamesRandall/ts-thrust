@@ -764,8 +764,13 @@ async function startGame() {
         const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
         const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+        const collisionPod = testCollision(collisionBuf, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y);
+        if (collisionPod !== CollisionResult.None) {
+          destroyAttachedPod(game);
+          sounds.playExplosion();
+        }
 
-        // Test tether line
+        /*// Test tether line
         if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
           destroyAttachedPod(game);
           sounds.playExplosion();
@@ -778,7 +783,7 @@ async function startGame() {
             destroyAttachedPod(game);
             sounds.playExplosion();
           }
-        }
+        }*/
       }
 
       // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
@@ -786,6 +791,15 @@ async function startGame() {
       if (bulletHitShip && !game.shieldActive) {
         destroyPlayerShip(game);
         sounds.playExplosion();
+      } else if (collision === CollisionResult.None && game.physics.state.podAttached) {
+        // check for enemy bullet hitting pod
+        const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
+        const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+        const bulletHitPod = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y, camX, camY);
+        if (bulletHitPod) {
+          destroyAttachedPod(game);
+          sounds.playExplosion();
+        }
       }
     }
 
