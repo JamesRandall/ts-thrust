@@ -179,6 +179,13 @@ function getTurretSprite(
   }
 }
 
+export function toScreenX(worldX: number, camX: number): number {
+    let sx = worldX * WORLD_SCALE_X - camX;
+    while (sx < -WORLD_WIDTH / 2) sx += WORLD_WIDTH;
+    while (sx >  WORLD_WIDTH / 2) sx -= WORLD_WIDTH;
+    return sx;
+}
+
 export function renderLevel(
   ctx: CanvasRenderingContext2D,
   level: Level,
@@ -207,15 +214,6 @@ export function renderLevel(
   const wx = (x: number) => x * WORLD_SCALE_X;
   const wy = (y: number) => y * WORLD_SCALE_Y;
 
-  // Convert a world X to a screen X, handling horizontal wrapping
-  const toScreenX = (worldX: number) => {
-    let sx = wx(worldX) - camX;
-    // Wrap into view
-    while (sx < -WORLD_WIDTH / 2) sx += WORLD_WIDTH;
-    while (sx > WORLD_WIDTH / 2) sx -= WORLD_WIDTH;
-    return sx;
-  };
-
   // Draw terrain polygons at three offsets to handle wrapping.
   // Offsets are computed dynamically so terrain stays visible even when the
   // camera has travelled more than one world-width from the origin.
@@ -241,7 +239,7 @@ export function renderLevel(
 
   // Draw objects (with wrapping)
   const drawMarker = (ox: number, oy: number, colour: string) => {
-    const sx = Math.round(toScreenX(ox));
+    const sx = Math.round(toScreenX(ox,camX));
     const sy = Math.round(wy(oy) - camY);
     ctx.fillStyle = colour;
     ctx.fillRect(sx - 3, sy - 3, 7, 7);
@@ -249,7 +247,7 @@ export function renderLevel(
 
   if (!generatorDestroyed && (generatorVisible ?? true)) {
     if (powerPlantSprite) {
-      const sx = Math.round(toScreenX(level.powerPlant.x));
+      const sx = Math.round(toScreenX(level.powerPlant.x,camX));
       const sy = Math.round(wy(level.powerPlant.y) - camY);
       drawRemappedSprite(ctx, powerPlantSprite, sx, sy - 2, level.objectColor, level.terrainColor);
     } else {
@@ -258,7 +256,7 @@ export function renderLevel(
   }
   if (!podDetached) {
     if (podStandSprite) {
-      const sx = Math.round(toScreenX(level.podPedestal.x));
+      const sx = Math.round(toScreenX(level.podPedestal.x,camX));
       const sy = Math.round(wy(level.podPedestal.y) - camY);
       drawRemappedSprite(ctx, podStandSprite, sx, sy - 1, level.objectColor, level.terrainColor);
     } else {
@@ -269,7 +267,7 @@ export function renderLevel(
     if (destroyedFuel?.has(i)) continue;
     const f = level.fuel[i];
     if (fuelSprite) {
-      const sx = Math.round(toScreenX(f.x));
+      const sx = Math.round(toScreenX(f.x,camX));
       const sy = Math.round(wy(f.y) - camY);
       drawRemappedSprite(ctx, fuelSprite, sx, sy - 2, level.objectColor, level.terrainColor);
     } else {
@@ -281,7 +279,7 @@ export function renderLevel(
     const t = level.turrets[i];
     if (turretSprites) {
       const sprite = getTurretSprite(t.direction, turretSprites);
-      const sx = Math.round(toScreenX(t.x));
+      const sx = Math.round(toScreenX(t.x,camX));
       const sy = Math.round(wy(t.y) - camY);
       drawRemappedSprite(ctx, sprite, sx, sy - 1, level.objectColor, level.terrainColor);
     } else {
@@ -292,7 +290,7 @@ export function renderLevel(
   if (switchSprites) {
     for (const sw of level.switches) {
       const sprite = sw.direction === 'left' ? switchSprites.left : switchSprites.right;
-      const sx = Math.round(toScreenX(sw.x));
+      const sx = Math.round(toScreenX(sw.x,camX));
       const sy = Math.round(wy(sw.y) - camY);
       drawRemappedSprite(ctx, sprite, sx, sy - 1, level.objectColor, level.terrainColor);
     }
@@ -397,7 +395,7 @@ export function drawStatusBar(
   const fuelValX = fuelX + 4 * charW - fuelStr.length * charW;
   drawText(ctx, fuelStr, fuelValX, valueY, bbcMicroColours.yellow, scale);
 
-  const livesStr = String(lives);
+  const livesStr = String(Math.max(0,lives-1));
   const livesValX = livesX + Math.floor((5 * charW - livesStr.length * charW) / 2);
   drawText(ctx, livesStr, livesValX, valueY, bbcMicroColours.yellow, scale);
 

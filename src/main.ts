@@ -1,4 +1,4 @@
-import {renderLevel, drawStatusBar, drawText, drawRemappedSprite, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y} from "./rendering";
+import {renderLevel, drawStatusBar, drawText, drawRemappedSprite, rotationToSpriteIndex, WORLD_SCALE_X, WORLD_SCALE_Y, toScreenX} from "./rendering";
 import {loadShipSprites, loadSprite, loadTurretSprites, loadSwitchSprites} from "./shipSprites";
 import fuelPng from "./sprites/fuel.png";
 import powerPlantPng from "./sprites/powerPlant.png";
@@ -144,8 +144,7 @@ async function startGame() {
   function renderScene(hideShip?: boolean, landscapeRevealed?: boolean) {
     const camX = Math.round(game.scroll.windowPos.x * WORLD_SCALE_X);
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
-    const podDetached = game.physics.state.podAttached;
-
+    const podDetached = game.physics.state.podAttached || (game.deathSequence?.hadPodAtDeath ?? false);
     // Hide ship when destroyed in death sequence
     const shouldHideShip = hideShip || game.deathSequence?.shipDestroyed;
 
@@ -194,7 +193,8 @@ async function startGame() {
         podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
       } else {
-        podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
+        //podCX = Math.round(game.level.podPedestal.x * WORLD_SCALE_X - camX + Math.floor(podStandSprite.width / 2));
+        podCX = toScreenX(game.level.podPedestal.x, camX)+Math.floor(podStandSprite.width / 2);
         podCY = Math.round(game.level.podPedestal.y * WORLD_SCALE_Y - camY - 1 + Math.floor(podSprite.height / 2));
       }
 
@@ -236,21 +236,54 @@ async function startGame() {
     const cy = 128;
     drawText(ctx, text, cx, cy, bbcMicroColours.white);
   }
+  function drawCenteredMessages(text1: string, text2: string, text3: string) {
+    const cx1 = Math.floor((INTERNAL_W - text1.length * 8) / 2);
+    const cy1 = 128-20;
+    drawText(ctx, text1, cx1, cy1, bbcMicroColours.red);
+    const cx2 = Math.floor((INTERNAL_W - text2.length * 8) / 2);
+    const cy2 = 128;
+    drawText(ctx, text2, cx2, cy2, bbcMicroColours.green);
+    const cx3 = Math.floor((INTERNAL_W - text3.length * 8) / 2);
+    const cy3 = 128+20;
+    drawText(ctx, text3, cx3, cy3, bbcMicroColours.yellow);
+  }
 
-  function processOrbitEscape() {
+  function processOrbitEscape() { 
+    const planetDestroyed = game.generator.planetCountdown >= 0;
     if (game.fuelEmpty) {
-      triggerMessage(game, "OUT OF FUEL", 'game-over');
-    } else if (game.physics.state.podAttached) {
+      triggerMessage(game, "OUT OF FUEL", "game-over", MESSAGE_DURATION * 2);
+      return;
+    }
+
+    if (game.physics.state.podAttached) {
       missionComplete(game);
-      triggerMessage(game, "MISSION COMPLETE", 'next-level');
-    } else if (game.generator.planetCountdown >= 0) {
-      game.lives--;
-      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-      else triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
+      if (planetDestroyed) {
+        game.messageTextAbove = "PLANET DESTROYED";
+      }
+      triggerMessage(game, "MISSION "+game.missionNumber+" COMPLETE", "next-level", MESSAGE_DURATION * 2);
+      return;
+    }
+
+    if (planetDestroyed) {
+      game.messageTextAbove = "PLANET DESTROYED";
+      // BBC Thrust penalty:
+      // destroying the planet but failing to evacuate the pod makes
+      // hostile guns +8 more aggressive on the next mission only.
+      game.planetDestroyedHostileGunModifier = 8;
+      if (game.lives <= 0) {
+        triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
+      } else {
+        triggerMessage(game, "MISSION " + (game.missionNumber + 1) + " FAILED", "next-level", MESSAGE_DURATION * 2);
+        game.messageTextBelow = "NO BONUS";
+      }
+      return;
+    }
+
+    // Mission incomplete and planet not destroyed - so retry.
+    if (game.lives <= 0) {
+      triggerMessage(game, "GAME OVER", "game-over", MESSAGE_DURATION * 2);
     } else {
-      game.lives--;
-      if (game.lives <= 0) triggerMessage(game, "GAME OVER", 'game-over');
-      else triggerMessage(game, "MISSION INCOMPLETE", 'retry');
+      triggerMessage(game, "MISSION INCOMPLETE", "retry", MESSAGE_DURATION * 2);
     }
   }
 
@@ -282,6 +315,13 @@ async function startGame() {
     const dt = lastTime < 0 ? 0 : (time - lastTime) / 1000;
     lastTime = time;
     handlePostProcessKeys();
+    
+    if (keys.has("Escape")) {
+      exitDemoToTitle();
+      postProcessFrame(time);
+      requestAnimationFrame(frame);
+      return;
+    }
 
     // Title screen — show terrain with text overlay, no ship
     if (title.active) {
@@ -396,14 +436,14 @@ async function startGame() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-      drawCenteredMessage("GAME OVER");
+      /*drawCenteredMessage("GAME OVER");
 
       // Check for any key to restart
       if (keys.size > 0) {
         keys.clear();
         resetTitleScreen(title);
         game = createGame(levels[0], 0);
-      }
+      }*/
 
       postProcessFrame(time);
       requestAnimationFrame(frame);
@@ -418,16 +458,21 @@ async function startGame() {
       requestAnimationFrame(frame);
       return;
     }
-    if (game.messageTimer > 0) {
+    if (game.messageTimer+game.messageTimerSecond > 0) {
       sounds.stopAll();
-      game.messageTimer--;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStatusBar(ctx, INTERNAL_W, game.fuel, game.lives, game.score);
-      if (game.messageText) {
-        drawCenteredMessage(game.messageText);
+      if (game.messageText && game.messageTimer>0) {
+        drawCenteredMessages(game.messageTextAbove!=null?game.messageTextAbove:"", game.messageText, game.messageTextBelow!=null?game.messageTextBelow:"");
+      } else if (game.messageTextSecond && game.messageTimerSecond>0) {
+        drawCenteredMessages("", game.messageTextSecond, "");
       }
-
-      if (game.messageTimer === 0 && game.pendingAction) {
+      if (game.messageTimer>0) {
+        game.messageTimer--;
+      } else if (game.messageTimerSecond>0) {
+        game.messageTimerSecond--;
+      }
+      if (game.messageTimer === 0 && game.messageTimerSecond === 0 && game.pendingAction) {
         switch (game.pendingAction) {
           case 'retry':
             retryLevel(game);
@@ -436,8 +481,9 @@ async function startGame() {
             game = advanceToNextLevel(game);
             break;
           case 'game-over':
-            game.gameOver = true;
-            break;
+            resetTitleScreen(title);
+            game = createGame(levels[0], 0);
+            break;            
         }
         game.pendingAction = null;
         game.messageText = null;
@@ -480,7 +526,6 @@ async function startGame() {
       if (game.teleport.step >= 12) {
         // Animation complete
         const wasDisappearing = game.teleport.isDisappearing;
-        game.teleport = null;
         if (wasDisappearing) {
           // During demo: orbit escape returns to title instead of normal logic
           if (demo.active) {
@@ -492,6 +537,7 @@ async function startGame() {
           processOrbitEscape();
         }
         renderScene();
+        game.teleport = null;
       } else {
         // Calculate size: expand 1→6, contract 6→1
         const step = game.teleport.step;
@@ -558,7 +604,7 @@ async function startGame() {
       for (let i = 0; i < levels.length; i++) {
         if (keys.has(`Digit${i + 1}`)) {
           sounds.stopAll();
-          game = createGame(levels[i], i);
+          game = createGame(levels[i], i, {missionNumber:i});
           keys.delete(`Digit${i + 1}`);
           break;
         }
@@ -575,7 +621,7 @@ async function startGame() {
         game = createGame(levels[game.levelNumber], game.levelNumber, {
           lives: game.lives,
           score: game.score,
-          missionNumber: game.missionNumber,
+          missionNumber: game.levelNumber+(reverseGravity?6:0)+(invisibleLandscape?12:0),
           reverseGravity,
           invisibleLandscape,
         });
@@ -605,6 +651,7 @@ async function startGame() {
     sounds.setMuted(demo.active);
 
     tick(game, dt, gameInput);
+    sounds.setMuted(demo.active); // we don't want any sounds playing in demo mode
     sounds.tick();
 
     // --- Demo mode: any real key exits back to title screen ---
@@ -642,6 +689,13 @@ async function startGame() {
       sounds.playCollect();
     }
 
+    // Extra-life ping
+    if (game.extraLifeThisTick) {
+      sounds.playCountdown(); 
+      game.extraLifeThisTick=false;
+    }
+
+
     // Pod picked up by tractor beam — double-ping, as in the original
     if (game.podAttachedThisTick) {
       sounds.playCollect();
@@ -657,9 +711,9 @@ async function startGame() {
     const camY = Math.round(game.scroll.windowPos.y * WORLD_SCALE_Y);
     const podDetached = game.physics.state.podAttached;
     // Remove pod stand from collision buffer as soon as tractor beam starts (or pod attached)
-    const podRemovedFromCollision = podDetached || game.tractorBeamStarted;
+    const podStandRemovedFromCollision = podDetached;// || game.tractorBeamStarted;
     const doorPolyCollision = getDoorPolygon(game.doorState, game.level.doorConfig, camX, camY);
-    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podRemovedFromCollision, switchSprites, doorPolyCollision);
+    renderCollisionBuffer(collisionBuf, game.level, camX, camY, fuelSprite, turretSprites, powerPlantSprite, podStandSprite, podSprite, game.destroyedTurrets, game.destroyedFuel, game.generator.destroyed, podStandRemovedFromCollision, switchSprites, doorPolyCollision, game.physics.state.podX,game.physics.state.podY);
     const collisionImageData = collisionBuf.ctx.getImageData(0, 0, collisionBuf.width, collisionBuf.height);
 
     // Remove bullets that hit terrain/objects
@@ -699,6 +753,12 @@ async function startGame() {
       spawnExplosion(game.explosions, bulletHits.switchHitX, bulletHits.switchHitY, bbcMicroColours.yellow);
       sounds.playExplosion();
     }
+    if (bulletHits.hitPod && game.physics.state.podAttached && !game.deathSequence) {
+      // player accidentally shot own pod while attached
+      destroyAttachedPod(game);
+      sounds.playExplosion();
+    }
+
 
     const spriteIdx = rotationToSpriteIndex(game.player.rotation);
     const center = shipCenters[spriteIdx];
@@ -722,13 +782,20 @@ async function startGame() {
         const shipCY = Math.round(game.player.y * WORLD_SCALE_Y - camY);
         const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
         const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+        const collisionPod = testCollision(collisionBuf, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y);
+        if (collisionPod !== CollisionResult.None && collisionPod !== CollisionResult.Pod && !game.deathSequence) {
+          destroyAttachedPod(game);
+          sounds.playExplosion();
+        }
 
-        // Test tether line
+        /*// Test tether line
+        // removed this code because BBC-Micro game did not check the tethher line collisions.
         if (testLineCollision(collisionImageData, shipCX, shipCY, podCX, podCY)) {
           destroyAttachedPod(game);
           sounds.playExplosion();
         }
         // Test pod sprite area
+        // removed this check, replaced it by sprite mask check above, with call to testCollision, which should be more accurate than rectangle overlap check.
         else {
           const podLeft = podCX - Math.floor(podSprite.width / 2);
           const podTop = podCY - Math.floor(podSprite.height / 2);
@@ -736,14 +803,23 @@ async function startGame() {
             destroyAttachedPod(game);
             sounds.playExplosion();
           }
-        }
+        }*/
       }
 
       // Bullet-ship collision — always remove bullets that hit, only kill player if shield is down
       const bulletHitShip = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[spriteIdx], shipScreenX, shipScreenY, camX, camY);
-      if (bulletHitShip && !game.shieldActive) {
+      if (bulletHitShip && !game.shieldActive && !game.deathSequence) {
         destroyPlayerShip(game);
         sounds.playExplosion();
+      } else if (collision === CollisionResult.None && game.physics.state.podAttached) {
+        // check for enemy bullet hitting pod
+        const podCX = Math.round(game.physics.state.podX * WORLD_SCALE_X - camX);
+        const podCY = Math.round(game.physics.state.podY * WORLD_SCALE_Y - camY);
+        const bulletHitPod = removeBulletsHittingShip(game.turretFiring.bullets, shipMasks[32], podCX-shipCenters[32].x, podCY-shipCenters[32].y, camX, camY);
+        if (bulletHitPod && !game.deathSequence) {
+          destroyAttachedPod(game);
+          sounds.playExplosion();
+        }
       }
     }
 
@@ -781,13 +857,6 @@ async function startGame() {
     // --- Process orbit escape — start disappear teleport ---
     if (game.escapedToOrbit) {
       game.escapedToOrbit = false;
-      if (demo.active) {
-        // Demo: orbit escape → return to title (should not happen but handle gracefully)
-        exitDemoToTitle();
-        postProcessFrame(time);
-        requestAnimationFrame(frame);
-        return;
-      }
       sounds.playEnterOrbit();
       startTeleport(game, true);
     }
@@ -807,9 +876,11 @@ async function startGame() {
       } else {
         game.lives--;
         if (game.lives <= 0) {
-          triggerMessage(game, "GAME OVER", 'game-over');
+          triggerMessage(game, "GAME OVER", 'game-over', MESSAGE_DURATION * 2);
         } else if (game.generator.planetCountdown >= 0 || game.planetKilled) {
-          triggerMessage(game, "PLANET DESTROYED", 'next-level', MESSAGE_DURATION * 2);
+          game.messageTextAbove = "PLANET DESTROYED";
+          triggerMessage(game, "MISSION "+(game.missionNumber+1)+" FAILED","next-level", MESSAGE_DURATION * 2);
+          game.messageTextBelow = "NO BONUS";
         } else {
           retryLevel(game);
         }

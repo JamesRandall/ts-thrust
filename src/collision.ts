@@ -2,6 +2,11 @@ import { Level, SwitchPosition } from "./levels";
 import { fillPolygon, Point, bbcMicroColours, WORLD_SCALE_X, WORLD_SCALE_Y, WORLD_WIDTH } from "./rendering";
 import { SpriteMask, TurretSprites, SwitchSprites } from "./shipSprites";
 
+export const EXTRA_BORDER_BUFFER = 200; // This makes the collision canvas 
+// larger than the display canvas by this amount in all directions.  The purpose
+// is to allow the player to shoot enemy guns which are just off screen.
+
+
 export enum CollisionResult {
   None       = 0,
   Terrain    = 1,
@@ -9,6 +14,7 @@ export enum CollisionResult {
   Turret     = 3,
   PowerPlant = 4,
   Pod        = 5,
+  Switch     = 6,
 }
 
 export interface CollisionBuffer {
@@ -24,10 +30,10 @@ const TERRAIN_COLLISION_COLOUR = "#0000ff";
 
 export function createCollisionBuffer(width: number, height: number): CollisionBuffer {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width+EXTRA_BORDER_BUFFER*2;
+  canvas.height = height+EXTRA_BORDER_BUFFER*2;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  return { canvas, ctx, width, height };
+  return { canvas, ctx, width: canvas.width, height: canvas.height };
 }
 
 export function renderCollisionBuffer(
@@ -39,18 +45,20 @@ export function renderCollisionBuffer(
   turretSprites?: TurretSprites,
   powerPlantSprite?: ImageBitmap,
   podStandSprite?: ImageBitmap,
+  podSprite?: ImageBitmap,
   destroyedTurrets?: Set<number>,
   destroyedFuel?: Set<number>,
   generatorDestroyed?: boolean,
-  podDetached?: boolean,
+  podDetachedFromStand?: boolean,
   switchSprites?: SwitchSprites,
   doorPolygon?: Point[] | null,
+  podX: number, podY: number,
 ): void {
   const { ctx, width, height } = buf;
   ctx.clearRect(0, 0, width, height);
 
-  const wx = (x: number) => x * WORLD_SCALE_X;
-  const wy = (y: number) => y * WORLD_SCALE_Y;
+  const wx = (x: number) => x * WORLD_SCALE_X+EXTRA_BORDER_BUFFER;
+  const wy = (y: number) => y * WORLD_SCALE_Y+EXTRA_BORDER_BUFFER;
 
   // Terrain polygons at three offsets to handle wrapping.
   // Offsets are dynamic so collision stays correct beyond one world-width.
@@ -69,17 +77,17 @@ export function renderCollisionBuffer(
   // Door polygon (terrain collision) at wrapping offsets
   if (doorPolygon) {
     for (const offset of offsets) {
-      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset, y: p.y }));
+      const offsetPoints = doorPolygon.map(p => ({ x: p.x + offset+ EXTRA_BORDER_BUFFER, y: p.y+ EXTRA_BORDER_BUFFER }));
       fillPolygon(ctx, offsetPoints, TERRAIN_COLLISION_COLOUR, Math.round(camY));
     }
   }
 
   // Objects (with wrapping)
   const toScreenX = (worldX: number) => {
-    let sx = wx(worldX) - camX;
+    let sx = wx(worldX) - camX - EXTRA_BORDER_BUFFER;
     while (sx < -WORLD_WIDTH / 2) sx += WORLD_WIDTH;
     while (sx > WORLD_WIDTH / 2) sx -= WORLD_WIDTH;
-    return sx;
+    return sx+EXTRA_BORDER_BUFFER;
   };
 
   const drawMarker = (ox: number, oy: number, colour: string) => {
@@ -99,7 +107,7 @@ export function renderCollisionBuffer(
       drawMarker(level.powerPlant.x, level.powerPlant.y, bbcMicroColours.cyan);
     }
   }
-  if (!podDetached) {
+  if (!podDetachedFromStand) {
     if (podStandSprite) {
       const sx = Math.round(toScreenX(level.podPedestal.x));
       const sy = Math.round(wy(level.podPedestal.y) - camY);
@@ -108,7 +116,13 @@ export function renderCollisionBuffer(
     } else {
       drawMarker(level.podPedestal.x, level.podPedestal.y, bbcMicroColours.white);
     }
-  }
+  } else {
+    // pod is picked up.  Draw pod.  Need to enable collision detection for player bullets into own pod.
+    const sx = Math.round(toScreenX(podX));
+    const sy = Math.round(wy(podY) - camY);
+    ctx.fillStyle = bbcMicroColours.white;
+    ctx.fillRect(sx, sy - 1, podSprite.width-1, podSprite.height-1);
+  }  
   for (let i = 0; i < level.fuel.length; i++) {
     if (destroyedFuel?.has(i)) continue;
     const f = level.fuel[i];
@@ -153,6 +167,8 @@ export function renderCollisionBuffer(
 
 /** Test a single screen pixel against the collision buffer image data. */
 function testPixelCollision(data: Uint8ClampedArray, width: number, height: number, px: number, py: number): boolean {
+  px+=EXTRA_BORDER_BUFFER;
+  py+=EXTRA_BORDER_BUFFER;
   if (px < 0 || px >= width || py < 0 || py >= height) return false;
   const idx = (py * width + px) * 4;
   return data[idx] + data[idx + 1] + data[idx + 2] > 0;
@@ -209,8 +225,8 @@ export function testCollision(
   let result = CollisionResult.None;
 
   for (const { dx, dy } of mask) {
-    const px = shipScreenX + dx;
-    const py = shipScreenY + dy;
+    const px = shipScreenX + dx + EXTRA_BORDER_BUFFER;
+    const py = shipScreenY + dy + EXTRA_BORDER_BUFFER;
 
     if (px < 0 || px >= width || py < 0 || py >= height) continue;
 
@@ -221,8 +237,8 @@ export function testCollision(
 
     if (r + g + b === 0) continue;
 
-    // Green (0,255,0) = switch sentinel — ship passes through, no collision
-    if (r === 0 && g === 255 && b === 0) continue;
+    //// Green (0,255,0) = switch sentinel — ship passes through, no collision
+    //if (r === 0 && g === 255 && b === 0) continue;
 
     // Identify what was hit — higher-priority results override lower
     let hit: CollisionResult;
@@ -236,6 +252,8 @@ export function testCollision(
       hit = CollisionResult.Pod;
     } else if (r === 255 && g === 0 && b === 255) {
       hit = CollisionResult.Fuel;
+    } else if (r === 0 && g === 255 && b === 0) {
+      hit = CollisionResult.Switch;
     } else {
       hit = CollisionResult.Terrain; // unknown colour — treat as terrain
     }

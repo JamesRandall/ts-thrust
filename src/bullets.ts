@@ -1,7 +1,8 @@
 import { ANGLE_X, ANGLE_Y } from "./physics";
 import { Level } from "./levels";
-import { WORLD_SCALE_X, WORLD_SCALE_Y } from "./rendering";
+import { WORLD_SCALE_X, WORLD_SCALE_Y, toScreenX } from "./rendering";
 import { SpriteMask } from "./shipSprites";
+import { EXTRA_BORDER_BUFFER } from "./collision";
 
 export interface Bullet {
   x: number;
@@ -48,6 +49,22 @@ export function createTurretFiringState(): TurretFiringState {
     tickCounter: 0,
     turretsFiredThisTick: false,
   };
+}
+
+export function getHostileGunShootProbability(
+  missionNumber: number,
+  planetDestroyedPenalty: number,
+): number {
+  // BBC Thrust turret aggressiveness.
+  //
+  // Missions 1-2: probability 1.
+  // Missions 3+: increases by 1 every mission.
+  // Capped at 35.
+  //
+  // A failed planet destruction attempt (planet destroyed but pod not
+  // evacuated) incurs a one-level penalty of +8.
+  const base = Math.min(35, Math.max(1, missionNumber - 1));
+  return base + planetDestroyedPenalty;
 }
 
 export function tickTurrets(
@@ -146,8 +163,8 @@ export function removeCollidingBullets(
   const { data, width, height } = imageData;
 
   state.bullets = state.bullets.filter(bullet => {
-    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
-    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX)+EXTRA_BORDER_BUFFER;
+    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY)+EXTRA_BORDER_BUFFER;
     for (let px = 0; px < 2; px++) {
       for (let py = 0; py < 2; py++) {
         const x = bx + px;
@@ -294,6 +311,7 @@ export interface BulletHitResult {
   hitTurrets: number[];
   hitFuel: number[];
   hitGenerator: boolean;
+  hitPod: boolean;
   generatorHitX: number;
   generatorHitY: number;
   hitSwitch: boolean;
@@ -316,10 +334,10 @@ export function processPlayerBulletCollisions(
 
   for (const bullet of state.bullets) {
     if (!bullet.active) continue;
-    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX);
-    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY);
+    const bx = Math.round(bullet.x * WORLD_SCALE_X - camX)+EXTRA_BORDER_BUFFER;
+    const by = Math.round(bullet.y * WORLD_SCALE_Y - camY)+EXTRA_BORDER_BUFFER;
 
-    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' = 'none';
+    let hitColor: 'none' | 'terrain' | 'turret' | 'fuel' | 'generator' | 'switch' | 'pod' = 'none';
 
     for (let px = 0; px < 2 && hitColor === 'none'; px++) {
       for (let py = 0; py < 2 && hitColor === 'none'; py++) {
@@ -336,6 +354,7 @@ export function processPlayerBulletCollisions(
         else if (r === 255 && g === 0 && b === 0) { hitColor = 'turret'; }
         else if (r === 255 && g === 0 && b === 255) { hitColor = 'fuel'; }
         else if (r === 0 && g === 255 && b === 255) { hitColor = 'generator'; }
+        else if (r === 255 && g === 255 && b === 255) { hitColor = 'pod'; }
         else { hitColor = 'terrain'; }
       }
     }
@@ -375,6 +394,8 @@ export function processPlayerBulletCollisions(
       result.hitGenerator = true;
       result.generatorHitX = bullet.x;
       result.generatorHitY = bullet.y;
+    } else if (hitColor === 'pod') {
+      result.hitPod = true;
     }
   }
 

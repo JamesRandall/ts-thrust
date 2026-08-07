@@ -2,12 +2,13 @@ import { Level, SpawnPoint, levels } from "./levels";
 import { ThrustPhysics, ThrustInput } from "./physics";
 import { CollisionResult } from "./collision";
 import { ScrollState, ScrollConfig, createScrollConfig, createScrollState, updateScroll } from "./scroll";
-import { WORLD_SCALE_X, WORLD_SCALE_Y, bbcMicroColours } from "./rendering";
+import { WORLD_SCALE_X, WORLD_SCALE_Y, bbcMicroColours, WORLD_WIDTH, toScreenX } from "./rendering";
 import { TurretFiringState, createTurretFiringState, tickTurrets, PlayerShootingState, createPlayerShootingState, tickPlayerShooting, tickPlayerBullets } from "./bullets";
 import { ExplosionState, createExplosionState, tickExplosions, spawnExplosion } from "./explosions";
 import { FuelCollectionState, createFuelCollectionState, tickFuelCollection } from "./fuelCollection";
 import { GeneratorState, createGeneratorState, tickGenerator, canTurretsFire } from "./generator";
 import { StarFieldState, createStarFieldState, tickStarField, seedStarField } from "./stars";
+import { getHostileGunShootProbability } from "./bullets";
 import { DoorState, createDoorState, tickDoor } from "./doors";
 import { GameInput } from "./input";
 
@@ -98,11 +99,14 @@ export interface GameState {
   scrollConfig: ScrollConfig;
   scrollAccumulator: number;
   turretFiring: TurretFiringState;
+  planetDestroyedHostileGunModifier: number;
   playerShooting: PlayerShootingState;
   destroyedTurrets: Set<number>;
   destroyedFuel: Set<number>;
   explosions: ExplosionState;
   fuelCollection: FuelCollectionState;
+  podCollectedThisTick: boolean;
+  extraLifeThisTick: boolean;
   generator: GeneratorState;
   doorState: DoorState;
   starField: StarFieldState;
@@ -117,7 +121,11 @@ export interface GameState {
   levelEndedFlag: boolean;
   escapedToOrbit: boolean;
   messageText: string | null;
+  messageTextAbove: string | null;
+  messageTextBelow: string | null;
+  messageTextSecond: string | null;
   messageTimer: number;
+  messageTimerSecond: number;
   pendingAction: PendingAction;
   teleport: TeleportAnimation | null;
   gameOver: boolean;
@@ -136,37 +144,47 @@ function selectSpawnPoint(
   currentMidpointY: number,
   hasPod: boolean,
 ): { spawnPoint: SpawnPoint; respawnWithPod: boolean } {
+
   const points = level.spawnPoints;
+
   let selectedIndex = 0;
+  let found = false;
   let respawnWithPod = hasPod;
 
+  // Find first checkpoint whose Y is at or below the player
   for (let i = 0; i < points.length; i++) {
     if (points[i].midpointY >= currentMidpointY) {
       selectedIndex = i;
+      found = true;
       break;
     }
-
-    if (i === points.length - 1) {
-      selectedIndex = i;
-
-      // Matches the 6502's special handling of the deepest checkpoint:
-      // lose the pod when respawning here.
-      respawnWithPod = false;
-    }
   }
 
-  // 6502 DEY logic
-  if (!hasPod && selectedIndex > 0) {
-    // on way down tunnels (i.e. without pod), we don't progress to the next waypoint
-    // until we've definitely gone right past it.  Hence move back one way point:
+  // Ran off the end of the checkpoint list:
+  // use deepest checkpoint and clear pod-respawn privilege.
+  if (!found) {
+    selectedIndex = points.length - 1;
+    respawnWithPod = false;
+  } else if (!respawnWithPod && selectedIndex > 0) {
+    // On descent (no pod), move back one checkpoint,
+    // except when already at the first checkpoint.
     selectedIndex--;
   }
+
+  // Special handling for deepest checkpoint:
+  // never respawn carrying the pod from here.
+  if (selectedIndex === points.length - 1) {
+    respawnWithPod = false;
+  }
+
+  //console.log("points.length", points.length,"selectedIndex", selectedIndex, "respawnWithPod", respawnWithPod);
 
   return {
     spawnPoint: points[selectedIndex],
     respawnWithPod,
   };
 }
+
 
 function applySpawnPoint(state: GameState, spawn: SpawnPoint): void {
   state.physics.state.x = spawn.midpointX;
@@ -191,7 +209,7 @@ function applySpawnPoint(state: GameState, spawn: SpawnPoint): void {
 export function createGame(
   level: Level,
   levelNumber: number = 0,
-  persistent?: { lives: number; score: number; missionNumber: number; reverseGravity?: boolean; invisibleLandscape?: boolean },
+  persistent?: { lives: number; score: number; fuel: number; missionNumber: number; reverseGravity?: boolean; invisibleLandscape?: boolean },
 ): GameState {
   const reverseGravity = persistent?.reverseGravity ?? false;
   const invisibleLandscape = persistent?.invisibleLandscape ?? false;
@@ -226,8 +244,8 @@ export function createGame(
       y: spawn.midpointY,
       rotation: (startAngle / 32) * Math.PI * 2,
     },
-    fuel: INITIAL_FUEL,
-    lives: persistent?.lives ?? 3,
+    fuel: persistent?.fuel ?? INITIAL_FUEL,
+    lives: persistent?.lives ?? 4,
     score: persistent?.score ?? 0,
     collisionResult: CollisionResult.None,
     shieldActive: false,
@@ -236,6 +254,7 @@ export function createGame(
     scrollAccumulator: 0,
     turretFiring: createTurretFiringState(),
     playerShooting: createPlayerShootingState(),
+    planetDestroyedHostileGunModifier: 0,
     destroyedTurrets: new Set(),
     destroyedFuel: new Set(),
     explosions: createExplosionState(),
@@ -254,8 +273,11 @@ export function createGame(
     levelEndedFlag: false,
     escapedToOrbit: false,
     messageText: null,
+    messageTextSecond: null,
     messageTimer: 0,
+    messageTimerSecond: 0,
     pendingAction: null,
+    extraLifeThisTick: false,    
     teleport: null,
     gameOver: false,
     deathSequence: null,
@@ -267,20 +289,25 @@ export function createGame(
     planetExplodeAccumulator: 0,
     frameCounter: 0,
   };
+  state.turretFiring.shootProbability =  getHostileGunShootProbability(state.missionNumber, state.planetDestroyedHostileGunModifier);
+
   startTeleport(state, false);
   return state;
 }
 
 /** Compute and freeze screen positions for the teleport animation. */
 export function startTeleport(state: GameState, isDisappearing: boolean): void {
+  const hasPod = state.physics.state.podAttached;
+
   const camX = Math.round(state.scroll.windowPos.x * WORLD_SCALE_X);
   const camY = Math.round(state.scroll.windowPos.y * WORLD_SCALE_Y);
 
-  const shipCX = Math.round(state.player.x * WORLD_SCALE_X - camX);
-  const shipCY = Math.round(state.player.y * WORLD_SCALE_Y - camY);
+  const shipWorldX = hasPod ? state.physics.state.shipX : state.player.x;
+  const shipWorldY = hasPod ? state.physics.state.shipY : state.player.y;
+  const shipCX = Math.round(shipWorldX * WORLD_SCALE_X - camX);
+  const shipCY = Math.round(shipWorldY * WORLD_SCALE_Y - camY);
 
   let podCX = 0, podCY = 0;
-  const hasPod = state.physics.state.podAttached;
   if (hasPod) {
     podCX = Math.round(state.physics.state.podX * WORLD_SCALE_X - camX);
     podCY = Math.round(state.physics.state.podY * WORLD_SCALE_Y - camY);
@@ -313,7 +340,7 @@ export function destroyPlayerShip(state: GameState): void {
   }
   state.deathSequence.timer = DEATH_TIMER_INITIAL;
   state.deathSequence.shipDestroyed = true;
-
+  state.podLineExists = false; 
   spawnExplosion(
     state.explosions,
     state.oldShipX + SHIP_EXPLOSION_X_OFFSET,
@@ -326,7 +353,7 @@ export function destroyPlayerShip(state: GameState): void {
 /** Destroy the attached pod — detaches, spawns explosion at pod position, resets death timer. */
 export function destroyAttachedPod(state: GameState): void {
   if (!state.physics.state.podAttached) return;
-
+  state.podLineExists = false; 
   if (!state.deathSequence) {
     state.deathSequence = {
       timer: DEATH_TIMER_INITIAL,
@@ -392,6 +419,7 @@ function tractorDistance(
   const d = dy + 3 * dx;
   return d > 255 ? 255 : d;
 }
+
 
 export function tick(state: GameState, dt: number, gameInput: GameInput): void {
   state.podAttachedThisTick = false;
@@ -468,8 +496,8 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
     }
 
     updateScroll(
-        { x: state.physics.state.x, y: state.physics.state.y },
-        { x: state.physics.state.forceX, y: state.physics.state.forceY },
+        { x: state.physics.state.shipX, y: state.physics.state.shipY },
+        { x: state.physics.state.velocityX, y: state.physics.state.velocityY },
         state.scroll,
         state.scrollConfig,
     );
@@ -496,8 +524,8 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
         state.physics.state.angle,
         state.player.x,
         state.player.y,
-        state.physics.state.forceX,
-        state.physics.state.forceY,
+        state.physics.state.velocityX,
+        state.physics.state.velocityY,
     );
 
     tickPlayerBullets(state.playerShooting);
@@ -543,22 +571,28 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
         // Pod circle (11x11) sits at the top — center at pixel (5, 5) from sprite origin
         const shipSX = state.player.x * WORLD_SCALE_X - camX;
         const shipSY = state.player.y * WORLD_SCALE_Y - camY;
-        const podSX = state.level.podPedestal.x * WORLD_SCALE_X - camX + 5;
+        //const podSX = state.level.podPedestal.x * WORLD_SCALE_X - camX + 5;
+        const podSX = toScreenX(state.level.podPedestal.x, camX)+5;
         const podSY = state.level.podPedestal.y * WORLD_SCALE_Y - camY + 4;
 
         // Pod must be on screen
         if (podSX >= 0 && podSX < 320 && podSY >= 0 && podSY < 256) {
-          const dist = tractorDistance(shipSX, shipSY, podSX, podSY);
 
+          const dist = tractorDistance(shipSX, shipSY, podSX, podSY);
           if (dist < TRACTOR_BEAM_START_DISTANCE) {
             // Close zone: start beam
             state.tractorBeamStarted = true;
             state.podLineExists = true;
           } else if (dist >= TRACTOR_ATTACH_DISTANCE && state.tractorBeamStarted) {
             // Far zone + beam started: attach pod at circle center
+            // Use the nearest wrapped copy of the pod so the initial tether
+            // angle is correct even after multiple world wraps.
+            const worldWidth = WORLD_WIDTH / WORLD_SCALE_X;
             const podWorldX = state.level.podPedestal.x + 5 / WORLD_SCALE_X;
+            const podWorldXWrapped = podWorldX + Math.round((state.player.x - podWorldX) / worldWidth) * worldWidth;
             const podWorldY = state.level.podPedestal.y + 4 / WORLD_SCALE_Y;
-            state.physics.attachPod(podWorldX, podWorldY);
+            state.physics.attachPod(podWorldXWrapped, podWorldY);
+            state.podLineExists = true;
             state.podLineExists = true;
             state.podAttachedThisTick = true;
           }
@@ -581,8 +615,8 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
   // camera stale while ship/pod positions have advanced, causing visible jitter.
   if (!scrollUpdated) {
     updateScroll(
-        { x: state.physics.state.x, y: state.physics.state.y },
-        { x: state.physics.state.forceX, y: state.physics.state.forceY },
+        { x: state.physics.state.shipX, y: state.physics.state.shipY },
+        { x: state.physics.state.velocityX, y: state.physics.state.velocityY },
         state.scroll,
         state.scrollConfig,
     );
@@ -592,6 +626,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
 /** Reset level state for retry — preserves score, lives, levelNumber, missionNumber. */
 export function retryLevel(state: GameState): void {
   // Detach pod first if attached
+  console.log("RetryLevel");
   state.physics.detachPod();
 
   const ds = state.deathSequence;
@@ -615,6 +650,10 @@ export function retryLevel(state: GameState): void {
     state.physics.state.pod.angleFrac = 0;
     state.physics.state.pod.angularVelocity = 0;
     state.physics.state.pod.tetherIndex = 15;
+
+    state.physics.derivePositions(); 
+    state.player.x = state.physics.state.shipX;
+    state.player.y = state.physics.state.shipY;
   }
 
   state.scroll.scrollSpeed.x = 0;
@@ -630,8 +669,8 @@ export function retryLevel(state: GameState): void {
   state.doorState = createDoorState();
   state.starField = createStarFieldState();
   seedStarField(state.starField, state.scroll.windowPos.x, state.level.objectColor, state.level.terrainColor);
-  state.fuel = INITIAL_FUEL;
-  state.fuelEmpty = false;
+  //state.fuel = INITIAL_FUEL;
+  //state.fuelEmpty = false;
   state.fuelTickCounter = 0;
   state.planetKilled = false;
   state.tractorBeamStarted = false;
@@ -667,6 +706,15 @@ export function triggerMessage(
   state.pendingAction = action;
 }
 
+export function triggerSecondMessage(
+  state: GameState,
+  text: string,
+  duration: number = MESSAGE_DURATION,
+): void {
+  state.messageTextSecond = text;
+  state.messageTimerSecond = duration;
+}
+
 /** Advance to next level, preserving persistent state. Toggles cycling modifiers on wrap. */
 export function advanceToNextLevel(state: GameState): GameState {
   const nextLevelNumber = (state.levelNumber + 1) % levels.length;
@@ -686,18 +734,30 @@ export function advanceToNextLevel(state: GameState): GameState {
   const newState = createGame(levels[nextLevelNumber], nextLevelNumber, {
     lives: state.lives,
     score: state.score,
+    fuel: state.fuel,
     missionNumber: state.missionNumber,
     reverseGravity,
     invisibleLandscape,
   });
+  newState.turretFiring.shootProbability =  getHostileGunShootProbability(newState.missionNumber, state.planetDestroyedHostileGunModifier);
+  newState.extraLifeThisTick=state.extraLifeThisTick;
 
   // Show modifier message on first activation of each cycle
-  if (reverseGravity && !state.reverseGravity) {
-    triggerMessage(newState, "REVERSE GRAVITY", null);
-  } else if (invisibleLandscape && !state.invisibleLandscape) {
-    triggerMessage(newState, "INVISIBLE LANDSCAPE", null);
+  if (state.missionNumber<=12) {
+    if (reverseGravity && !state.reverseGravity) {
+      triggerSecondMessage(newState, "REVERSE GRAVITY", MESSAGE_DURATION*2);
+    } else if (invisibleLandscape && !state.invisibleLandscape) {
+      triggerSecondMessage(newState, "INVISIBLE LANDSCAPE", MESSAGE_DURATION*2);
+    } 
+  } else if (state.missionNumber==24) {
+    // In the original game, this also came with an animation of the spaceship flying left, with the stars scrolling right.
+    // This is missing from the type-script version for now.
+    triggerSecondMessage(newState, "I LOVE SPACE", MESSAGE_DURATION*2);
+  } else if (state.missionNumber==48) {
+    triggerSecondMessage(newState, "PHYSICS IS FUN", MESSAGE_DURATION*2);
+  } else if (state.missionNumber==72) {
+    triggerSecondMessage(newState, "SUPPORT HOTOL", MESSAGE_DURATION*2);
   }
-
   return newState;
 }
 
@@ -706,15 +766,44 @@ export function addScore(state: GameState, points: number): void {
   const oldThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
   state.score += points;
   const newThousands = Math.floor(state.score / EXTRA_LIFE_THRESHOLD);
-  state.lives += (newThousands - oldThousands);
+  const life_bonus=(newThousands - oldThousands);
+  state.lives += life_bonus;
 }
 
 /** Apply mission complete bonus scoring and extra lives. */
-export function missionComplete(state: GameState): void {
+export function missionComplete(state: GameState): void {  
+  /*
+  \ Mission completion bonus formula (from Thrust 6502 code):
+  \   level_number = (mission_number - 1) MOD 6
+  \   bonus = 400 * (level_number + 5) + (planet_destroyed ? 2000 : 0))
+  \
+  \ Hence:
+  \   normal completion    = 2000..4000 points
+  \   planet destroyed     = 4000..6000 points
+  \
+  \ Examples: 
+  \ (values shown as normal_bonus / planet_destroyed_bonus)
+  \   Mission  1 (level 0): 2000 / 4000
+  \   Mission  2 (level 1): 2400 / 4400
+  \   Mission  3 (level 2): 2800 / 4800
+  \   Mission  4 (level 3): 3200 / 5200
+  \   Mission  5 (level 4): 3600 / 5600
+  \   Mission  6 (level 5): 4000 / 6000
+  \   Mission  7 (level 0): 2000 / 4000
+  \   Mission  8 (level 1): 2400 / 4400
+  \   Mission  9 (level 2): 2800 / 4800
+  \   Mission 10 (level 3): 3200 / 5200
+  */
+  
   state.missionNumber++;
+  let score=0;
   let loopCount = state.levelNumber + BONUS_LOOPS_BASE;
   if (state.generator.planetCountdown >= 0) loopCount += BONUS_LOOPS_PLANET_DESTROYED;
+  const oldLives=state.lives;
   for (let i = 0; i < loopCount; i++) {
     addScore(state, BONUS_SCORE_PER_LOOP);
+    score+=BONUS_SCORE_PER_LOOP;
   }
+  state.messageTextBelow="Bonus "+score;
+  state.extraLifeThisTick=state.lives>oldLives;
 }

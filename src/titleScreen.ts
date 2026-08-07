@@ -4,7 +4,7 @@ import {keyBindings, keyDisplayName, remapActions, KeyBindings, saveKeyBindings}
 
 // Number of visible pages (instructions + scoreboard) before demo triggers
 const TITLE_PAGE_COUNT = 2;
-const PAGE_FLIP_INTERVAL = 5;
+const PAGE_FLIP_INTERVALS = [10, 5];
 
 export interface KeyRemapState {
   active: boolean;
@@ -71,8 +71,10 @@ export function resetTitleScreen(state: TitleScreenState): void {
 export function updateTitleScreen(state: TitleScreenState, dt: number): void {
   if (state.remap) return;  // Freeze page timer during key remap
   state.pageTimer += dt;
-  if (state.pageTimer >= PAGE_FLIP_INTERVAL) {
-    state.pageTimer -= PAGE_FLIP_INTERVAL;
+  const interval = PAGE_FLIP_INTERVALS[state.page];
+
+  if (state.pageTimer >= interval) {
+    state.pageTimer -= interval;
     const nextPage = state.page + 1;
     if (nextPage >= TITLE_PAGE_COUNT) {
       // Scoreboard has timed out — signal main.ts to start demo

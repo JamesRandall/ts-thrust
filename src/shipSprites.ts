@@ -30,6 +30,7 @@ import ship28 from './sprites/ship_28.png'
 import ship29 from './sprites/ship_29.png'
 import ship30 from './sprites/ship_30.png'
 import ship31 from './sprites/ship_31.png'
+import podSprite from './sprites/pod.png'
 
 import gunUpLeft from './sprites/gun_up_left.png'
 import gunUpRight from './sprites/gun_up_right.png'
@@ -72,7 +73,7 @@ const spriteUrls: string[] = [
   ship00, ship01, ship02, ship03, ship04, ship05, ship06, ship07,
   ship08, ship09, ship10, ship11, ship12, ship13, ship14, ship15,
   ship16, ship17, ship18, ship19, ship20, ship21, ship22, ship23,
-  ship24, ship25, ship26, ship27, ship28, ship29, ship30, ship31,
+  ship24, ship25, ship26, ship27, ship28, ship29, ship30, ship31, podSprite
 ];
 
 export type SpriteMask = { dx: number; dy: number }[];
