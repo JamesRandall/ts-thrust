@@ -113,6 +113,7 @@ export interface GameState {
   planetKilled: boolean;
   tractorBeamStarted: boolean;
   podLineExists: boolean;
+  podAttachedThisTick: boolean;
   fuelTickCounter: number;
   fuelEmpty: boolean;
   levelNumber: number;
@@ -219,7 +220,7 @@ export function createGame(
     x: spawn.midpointX,
     y: spawn.midpointY,
     angle: startAngle,
-    level: levelNumber, // Fix 2026-07 mikefairbank. Added this line to fix weak gravity bug
+    level: levelNumber,
     reverseGravity,
   });
 
@@ -264,6 +265,7 @@ export function createGame(
     planetKilled: false,
     tractorBeamStarted: false,
     podLineExists: false,
+    podAttachedThisTick: false,
     fuelTickCounter: 0,
     fuelEmpty: false,
     levelNumber,
@@ -420,6 +422,8 @@ function tractorDistance(
 
 
 export function tick(state: GameState, dt: number, gameInput: GameInput): void {
+  state.podAttachedThisTick = false;
+
   // Planet explosion animation runs at 50Hz (BBC Micro vsync rate)
   state.planetExplodeAccumulator += dt;
   while (state.planetExplodeAccumulator >= VSYNC_STEP_S) {
@@ -590,7 +594,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
             state.physics.attachPod(podWorldXWrapped, podWorldY);
             state.podLineExists = true;
             state.podLineExists = true;
-            state.podCollectedThisTick = true;
+            state.podAttachedThisTick = true;
           }
           // Dead zone ($75-$83): no change
         }
@@ -671,6 +675,7 @@ export function retryLevel(state: GameState): void {
   state.planetKilled = false;
   state.tractorBeamStarted = false;
   state.podLineExists = false;
+  state.podAttachedThisTick = false;
   state.levelEndedFlag = false;
   state.escapedToOrbit = false;
   state.messageText = null;

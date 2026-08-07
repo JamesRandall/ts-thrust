@@ -21,8 +21,8 @@ const COUNTDOWN_TICKS_PER_SECOND = 32;
 const GENERATOR_SMOKE_OFFSET_X = 4;
 
 export interface GeneratorState {
-  rechargeCounter: number;      // 0–255; while > 0 guns disabled
-  rechargeIncrease: number;     // cumulative damage accumulator (init 50)
+  turretDisableTimer: number;   // 0–255; while > 0 guns disabled
+  generatorTotalDamage: number; // cumulative damage accumulator (init 50)
   planetCountdown: number;      // -1 = inactive, 10→0 = seconds remaining
   countdownTicks: number;       // sub-second counter (32 ticks per second)
   destroyed: boolean;           // removed from level (no-overflow hit)
@@ -33,8 +33,8 @@ export interface GeneratorState {
 
 export function createGeneratorState(): GeneratorState {
   return {
-    rechargeCounter: 15,
-    rechargeIncrease: 50,
+    turretDisableTimer: 15,
+    generatorTotalDamage: 50,
     planetCountdown: -1,
     countdownTicks: 0,
     destroyed: false,
@@ -54,13 +54,12 @@ export function tickGenerator(
 
   state.tickCounter = (state.tickCounter + 1) & BYTE_MASK;
 
-  // Recharge decrement: every other tick
+  // Turret re-enable countdown: every other tick.
+  // Note: generatorTotalDamage deliberately does NOT decay here — in the
+  // original game accumulated damage persists while the reactor recharges.
   if ((state.tickCounter & 1) === 0) {
-    if (state.rechargeCounter > 0) {
-      state.rechargeCounter--;  
-    }
-    if (state.rechargeIncrease > 0) {
-      //state.rechargeIncrease--;  2026-07 mikefairbank.  Removed to stop the generator's health recharging (to match original game logic).
+    if (state.turretDisableTimer > 0) {
+      state.turretDisableTimer--;
     }
   }
 
@@ -84,8 +83,8 @@ export function tickGenerator(
     }
   }
 
-  // Smoke: if not destroyed, rechargeCounter === 0, planetCountdown < 0, every 16 ticks
-  if (!state.destroyed && state.rechargeCounter === 0 && state.planetCountdown < 0 && (state.tickCounter & SMOKE_INTERVAL_MASK) === 0) {
+  // Smoke: if not destroyed, turretDisableTimer === 0, planetCountdown < 0, every 16 ticks
+  if (!state.destroyed && state.turretDisableTimer === 0 && state.planetCountdown < 0 && (state.tickCounter & SMOKE_INTERVAL_MASK) === 0) {
     explosions.particles.push({
       x: level.powerPlant.x + GENERATOR_SMOKE_OFFSET_X,
       y: level.powerPlant.y - 1.5,
@@ -135,26 +134,26 @@ export function handleGeneratorHit(
   }
 
   // Calculate new recharge
-  const newRecharge = (Math.floor(Math.random() * 256) & RECHARGE_RANDOM_MASK) + state.rechargeIncrease;
+  const newRecharge = (Math.floor(Math.random() * 256) & RECHARGE_RANDOM_MASK) + state.generatorTotalDamage;
 
   if (newRecharge > RECHARGE_MAX) {
     // Overflow
     if (state.planetCountdown >= 0) {
       // Already counting down
-      state.rechargeCounter = RECHARGE_MAX;
+      state.turretDisableTimer = RECHARGE_MAX;
     } else {
-      state.rechargeCounter = RECHARGE_MAX;
+      state.turretDisableTimer = RECHARGE_MAX;
       state.planetCountdown = PLANET_COUNTDOWN_SECONDS;
       state.countdownTicks = 1;
     }
-    state.rechargeIncrease = newRecharge & BYTE_MASK;
+    state.generatorTotalDamage = newRecharge & BYTE_MASK;
   } else {
     // No overflow — stun turrets, accumulate damage
-    state.rechargeCounter = newRecharge;
-    state.rechargeIncrease = newRecharge;
+    state.turretDisableTimer = newRecharge;
+    state.generatorTotalDamage = newRecharge;
   }
 }
 
 export function canTurretsFire(state: GeneratorState): boolean {
-  return state.rechargeCounter === 0 && state.planetCountdown < 0;
+  return state.turretDisableTimer === 0 && state.planetCountdown < 0;
 }
