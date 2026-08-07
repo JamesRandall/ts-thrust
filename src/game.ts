@@ -145,36 +145,45 @@ function selectSpawnPoint(
 ): { spawnPoint: SpawnPoint; respawnWithPod: boolean } {
 
   const points = level.spawnPoints;
+
   let selectedIndex = 0;
+  let found = false;
   let respawnWithPod = hasPod;
 
+  // Find first checkpoint whose Y is at or below the player
   for (let i = 0; i < points.length; i++) {
     if (points[i].midpointY >= currentMidpointY) {
       selectedIndex = i;
+      found = true;
       break;
     }
-
-    if (i === points.length - 1) {
-      selectedIndex = i;
-
-      // Matches the 6502's special handling of the deepest checkpoint:
-      // lose the pod when respawning here.
-      respawnWithPod = false;
-    }
   }
 
-  // 6502 DEY logic
-  if (!hasPod && selectedIndex > 0) {
-    // on way down tunnels (i.e. without pod), we don't progress to the next waypoint
-    // until we've definitely gone right past it.  Hence move back one way point:
+  // Ran off the end of the checkpoint list:
+  // use deepest checkpoint and clear pod-respawn privilege.
+  if (!found) {
+    selectedIndex = points.length - 1;
+    respawnWithPod = false;
+  } else if (!respawnWithPod && selectedIndex > 0) {
+    // On descent (no pod), move back one checkpoint,
+    // except when already at the first checkpoint.
     selectedIndex--;
   }
+
+  // Special handling for deepest checkpoint:
+  // never respawn carrying the pod from here.
+  if (selectedIndex === points.length - 1) {
+    respawnWithPod = false;
+  }
+
+  //console.log("points.length", points.length,"selectedIndex", selectedIndex, "respawnWithPod", respawnWithPod);
 
   return {
     spawnPoint: points[selectedIndex],
     respawnWithPod,
   };
 }
+
 
 function applySpawnPoint(state: GameState, spawn: SpawnPoint): void {
   state.physics.state.x = spawn.midpointX;
@@ -613,6 +622,7 @@ export function tick(state: GameState, dt: number, gameInput: GameInput): void {
 /** Reset level state for retry — preserves score, lives, levelNumber, missionNumber. */
 export function retryLevel(state: GameState): void {
   // Detach pod first if attached
+  console.log("RetryLevel");
   state.physics.detachPod();
 
   const ds = state.deathSequence;
